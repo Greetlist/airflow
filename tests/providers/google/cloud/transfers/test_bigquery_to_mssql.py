@@ -15,37 +15,38 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import unittest
 from unittest import mock
 
 from airflow.providers.google.cloud.transfers.bigquery_to_mssql import BigQueryToMsSqlOperator
 
-TASK_ID = 'test-bq-create-table-operator'
-TEST_PROJECT_ID = 'test-project'
-TEST_DATASET = 'test-dataset'
-TEST_TABLE_ID = 'test-table-id'
-TEST_DAG_ID = 'test-bigquery-operators'
+TASK_ID = "test-bq-create-table-operator"
+TEST_PROJECT_ID = "test-project"
+TEST_DATASET = "test-dataset"
+TEST_TABLE_ID = "test-table-id"
+TEST_DAG_ID = "test-bigquery-operators"
 
 
 class TestBigQueryToMsSqlOperator(unittest.TestCase):
-    @mock.patch('airflow.providers.google.cloud.transfers.bigquery_to_mssql.BigQueryHook')
+    @mock.patch("airflow.providers.google.cloud.transfers.bigquery_to_mssql.BigQueryHook")
     def test_execute_good_request_to_bq(self, mock_hook):
-        destination_table = 'table'
+        destination_table = "table"
         operator = BigQueryToMsSqlOperator(
             task_id=TASK_ID,
-            source_project_dataset_table=f'{TEST_PROJECT_ID}.{TEST_DATASET}.{TEST_TABLE_ID}',
+            source_project_dataset_table=f"{TEST_PROJECT_ID}.{TEST_DATASET}.{TEST_TABLE_ID}",
             mssql_table=destination_table,
             replace=False,
         )
 
-        operator.execute(None)
+        operator.execute(context=mock.MagicMock())
         # fmt: off
-        mock_hook.return_value.get_conn.return_value.cursor.return_value.get_tabledata\
-            .assert_called_once_with(
-                dataset_id=TEST_DATASET,
-                table_id=TEST_TABLE_ID,
-                max_results=1000,
-                selected_fields=None,
-                start_index=0,
-            )
+        mock_hook.return_value.list_rows.assert_called_once_with(
+            dataset_id=TEST_DATASET,
+            table_id=TEST_TABLE_ID,
+            max_results=1000,
+            selected_fields=None,
+            start_index=0,
+        )
         # fmt: on

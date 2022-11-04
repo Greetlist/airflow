@@ -21,10 +21,10 @@
 
 /*
   global d3, document, nodes, taskInstances, tasks, edges, dagreD3, localStorage, $,
-  autoRefreshInterval, moment, convertSecsToHumanReadable
+  autoRefreshInterval, moment, convertSecsToHumanReadable, priority
 */
 
-import getMetaValue from './meta_value';
+import { getMetaValue, finalStatesMap } from './utils';
 import { escapeHtml } from './main';
 import tiTooltip, { taskNoInstanceTooltip } from './task_instances';
 import { callModal } from './dag';
@@ -32,8 +32,10 @@ import { callModal } from './dag';
 // dagId comes from dag.html
 const dagId = getMetaValue('dag_id');
 const executionDate = getMetaValue('execution_date');
+const dagRunId = getMetaValue('dag_run_id');
 const arrange = getMetaValue('arrange');
 const taskInstancesUrl = getMetaValue('task_instances_url');
+const isSchedulerRunning = getMetaValue('is_scheduler_running');
 
 // This maps the actual taskId to the current graph node id that contains the task
 // (because tasks may be grouped into a group node)
@@ -57,6 +59,13 @@ const stateFocusMap = {
   deferred: false,
   no_status: false,
 };
+
+const checkRunState = () => {
+  const states = Object.values(taskInstances).map((ti) => ti.state);
+  return !states.some((state) => (
+    ['success', 'failed', 'upstream_failed', 'skipped', 'removed'].indexOf(state) === -1));
+};
+
 const taskTip = d3.tip()
   .attr('class', 'tooltip d3-tip')
   .html((toolTipHtml) => toolTipHtml);
@@ -73,6 +82,35 @@ const g = new dagreD3.graphlib.Graph({ compound: true }).setGraph({
 const render = dagreD3.render();
 const svg = d3.select('#graph-svg');
 let innerSvg = d3.select('#graph-svg g');
+
+// We modify the label of task map nodes to include the brackets and a count of mapped tasks
+// returns true if at least one node is changed
+const updateNodeLabels = (node, instances) => {
+  let haveLabelsChanged = false;
+  let { label } = node.value;
+  // Check if there is a count of mapped instances
+  if (tasks[node.id] && tasks[node.id].is_mapped) {
+    const count = instances[node.id]
+      && instances[node.id].mapped_states
+      ? instances[node.id].mapped_states.length
+      : ' ';
+    if (!label.includes(`[${count}]`)) {
+      label = `${label} [${count}]`;
+    }
+  }
+  if (g.node(node.id) && g.node(node.id).label !== label) {
+    g.node(node.id).label = label;
+    haveLabelsChanged = true;
+  }
+
+  if (node.children) {
+    // Iterate through children and return true if at least one has been changed
+    const updatedNodes = node.children.map((n) => updateNodeLabels(n, instances));
+    return updatedNodes.some((changed) => changed);
+  }
+
+  return haveLabelsChanged;
+};
 
 // Remove the node with this nodeId from g.
 function removeNode(nodeId) {
@@ -139,15 +177,27 @@ function draw() {
       // A group node
       if (d3.event.defaultPrevented) return;
       expandGroup(nodeId, node);
+      updateNodeLabels(nodes, taskInstances);
       draw();
       focusGroup(nodeId);
     } else if (nodeId in taskInstances) {
       // A task node
       const task = tasks[nodeId];
       const tryNumber = taskInstances[nodeId].try_number || 0;
+      let mappedStates = [];
+      if (task.is_mapped) mappedStates = taskInstances[nodeId].mapped_states;
 
-      if (task.task_type === 'SubDagOperator') callModal(nodeId, executionDate, task.extra_links, tryNumber, true);
-      else callModal(nodeId, executionDate, task.extra_links, tryNumber, undefined);
+      callModal({
+        taskId: nodeId,
+        executionDate,
+        extraLinks: task.extra_links,
+        tryNumber,
+        isSubDag: task.task_type === 'SubDagOperator',
+        dagRunId,
+        mapIndex: task.map_index,
+        isMapped: task.is_mapped,
+        mappedStates,
+      });
     }
   });
 
@@ -198,7 +248,7 @@ function setUpZoomSupport() {
   const graphWidth = g.graph().width;
   const graphHeight = g.graph().height;
   // Get SVG dimensions
-  const padding = 20;
+  const padding = 80;
   const svgBb = svg.node().getBoundingClientRect();
   const width = svgBb.width - padding * 2;
   const height = svgBb.height - padding; // we are not centering the dag vertically
@@ -351,41 +401,6 @@ function setFocusMap(state) {
 
 const stateIsSet = () => !!Object.keys(stateFocusMap).find((key) => stateFocusMap[key]);
 
-let prevTis;
-
-function handleRefresh() {
-  $('#loading-dots').css('display', 'inline-block');
-  $.get(getTaskInstanceURL)
-    .done(
-      (tis) => {
-        // only refresh if the data has changed
-        if (prevTis !== tis) {
-        // eslint-disable-next-line no-global-assign
-          taskInstances = JSON.parse(tis);
-          const states = Object.values(taskInstances).map((ti) => ti.state);
-          updateNodesStates(taskInstances);
-
-          // end refresh if all states are final
-          if (!states.some((state) => (
-            ['success', 'failed', 'upstream_failed', 'skipped', 'removed'].indexOf(state) === -1))
-          ) {
-            $('#auto_refresh').prop('checked', false);
-            clearInterval(refreshInterval);
-          }
-        }
-        prevTis = tis;
-        setTimeout(() => { $('#loading-dots').hide(); }, 500);
-        $('#error').hide();
-      },
-    ).fail((_, textStatus, err) => {
-      $('#error_msg').text(`${textStatus}: ${err}`);
-      $('#error').show();
-      setTimeout(() => { $('#loading-dots').hide(); }, 500);
-      $('#chart_section').hide(1000);
-      $('#datatable_section').hide(1000);
-    });
-}
-
 let refreshInterval;
 
 function startOrStopRefresh() {
@@ -396,6 +411,54 @@ function startOrStopRefresh() {
   } else {
     clearInterval(refreshInterval);
   }
+}
+
+// pause autorefresh when the page is not active
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    clearInterval(refreshInterval);
+  } else {
+    initRefresh();
+  }
+};
+
+document.addEventListener('visibilitychange', handleVisibilityChange);
+
+let prevTis;
+
+function handleRefresh() {
+  $('#loading-dots').css('display', 'inline-block');
+  $.get(getTaskInstanceURL)
+    .done(
+      (tis) => {
+        // only refresh if the data has changed
+        if (prevTis !== tis) {
+        // eslint-disable-next-line no-global-assign
+          updateNodesStates(tis);
+
+          // Only redraw the graph if labels have changed
+          const haveLabelsChanged = updateNodeLabels(nodes, tis);
+          if (haveLabelsChanged) draw();
+
+          // end refresh if all states are final
+          const isFinal = checkRunState();
+          if (isFinal) {
+            $('#auto_refresh').prop('checked', false);
+            clearInterval(refreshInterval);
+          }
+        }
+        prevTis = tis;
+        setTimeout(() => { $('#loading-dots').hide(); }, 500);
+        $('#error').hide();
+      },
+    ).fail((response, textStatus, err) => {
+      const description = (response.responseJSON && response.responseJSON.error) || 'Something went wrong.';
+      $('#error_msg').text(`${textStatus}: ${err} ${description}`);
+      $('#error').show();
+      setTimeout(() => { $('#loading-dots').hide(); }, 500);
+      $('#chart_section').hide(1000);
+      $('#datatable_section').hide(1000);
+    });
 }
 
 $('#auto_refresh').change(() => {
@@ -410,29 +473,16 @@ $('#auto_refresh').change(() => {
 });
 
 function initRefresh() {
-  if (localStorage.getItem('disableAutoRefresh')) {
-    $('#auto_refresh').prop('checked', false);
-  }
+  const isDisabled = localStorage.getItem('disableAutoRefresh');
+  const isFinal = checkRunState();
+  $('#auto_refresh').prop('checked', !(isDisabled || isFinal) && isSchedulerRunning === 'True');
   startOrStopRefresh();
   d3.select('#refresh_button').on('click', () => handleRefresh());
 }
 
 // Generate tooltip for a group node
 function groupTooltip(node, tis) {
-  const numMap = new Map([
-    ['success', 0],
-    ['failed', 0],
-    ['upstream_failed', 0],
-    ['up_for_retry', 0],
-    ['up_for_reschedule', 0],
-    ['running', 0],
-    ['deferred', 0],
-    ['sensing', 0],
-    ['queued', 0],
-    ['scheduled', 0],
-    ['skipped', 0],
-    ['no_status', 0],
-  ]);
+  const numMap = finalStatesMap();
 
   let minStart;
   let maxEnd;
@@ -471,18 +521,19 @@ function groupTooltip(node, tis) {
 // Initiating the tooltips
 function updateNodesStates(tis) {
   g.nodes().forEach((nodeId) => {
-    const { elem } = g.node(nodeId);
+    const node = g.node(nodeId);
+    const { elem } = node;
+    const taskId = nodeId;
+
     if (elem) {
       const classes = `node enter ${getNodeState(nodeId, tis)}`;
       elem.setAttribute('class', classes);
       elem.setAttribute('data-toggle', 'tooltip');
 
-      const taskId = nodeId;
-      const node = g.node(nodeId);
       elem.onmouseover = (evt) => {
         let tt;
         if (taskId in tis) {
-          tt = tiTooltip(tis[taskId]);
+          tt = tiTooltip(tis[taskId], tasks[taskId]);
         } else if (node.children) {
           tt = groupTooltip(node, tis);
         } else if (taskId in tasks) {
@@ -547,12 +598,6 @@ function getNodeState(nodeId, tis) {
       childrenStates.add(state == null ? 'no_status' : state);
     }
   });
-
-  // In this order, if any of these states appeared in childrenStates, return it as
-  // the group state.
-  const priority = ['failed', 'upstream_failed', 'up_for_retry', 'up_for_reschedule',
-    'queued', 'scheduled', 'sensing', 'running', 'shutdown', 'restarting', 'removed',
-    'no_status', 'success', 'skipped'];
 
   return priority.find((state) => childrenStates.has(state)) || 'no_status';
 }
@@ -713,6 +758,7 @@ expandGroup(null, nodes);
 expandSavedGroups(expandedGroups, nodes);
 
 // Draw once after all groups have been expanded
+updateNodeLabels(nodes, taskInstances);
 draw();
 
 // Restore focus (if available)

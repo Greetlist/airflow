@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from contextlib import contextmanager
 
 from airflow.api_connexion.exceptions import EXCEPTIONS_LINK_MAP
@@ -56,6 +58,8 @@ def create_user(app, username, role_name=None, email=None, permissions=None):
     if role_name:
         delete_role(app, role_name)
         role = create_role(app, role_name, permissions)
+    else:
+        role = []
 
     return appbuilder.sm.add_user(
         username=username,
@@ -80,15 +84,23 @@ def create_role(app, name, permissions=None):
     return role
 
 
+def set_user_single_role(app, user, role_name):
+    role = create_role(app, role_name)
+    if role not in user.roles:
+        user.roles = [role]
+        app.appbuilder.sm.update_user(user)
+        user._perms = None
+
+
 def delete_role(app, name):
-    if app.appbuilder.sm.find_role(name):
-        app.appbuilder.sm.delete_role(name)
+    if name not in EXISTING_ROLES:
+        if app.appbuilder.sm.find_role(name):
+            app.appbuilder.sm.delete_role(name)
 
 
 def delete_roles(app):
     for role in app.appbuilder.sm.get_all_roles():
-        if role.name not in EXISTING_ROLES:
-            app.appbuilder.sm.delete_role(role.name)
+        delete_role(app, role.name)
 
 
 def delete_user(app, username):
@@ -102,11 +114,16 @@ def delete_user(app, username):
             break
 
 
+def delete_users(app):
+    for user in app.appbuilder.sm.get_all_users():
+        delete_user(app, user.username)
+
+
 def assert_401(response):
     assert response.status_code == 401, f"Current code: {response.status_code}"
     assert response.json == {
-        'detail': None,
-        'status': 401,
-        'title': 'Unauthorized',
-        'type': EXCEPTIONS_LINK_MAP[401],
+        "detail": None,
+        "status": 401,
+        "title": "Unauthorized",
+        "type": EXCEPTIONS_LINK_MAP[401],
     }

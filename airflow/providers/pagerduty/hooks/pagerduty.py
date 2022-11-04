@@ -16,8 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for sending or receiving data from PagerDuty as well as creating PagerDuty incidents."""
+from __future__ import annotations
+
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pdpyras
 
@@ -49,16 +51,16 @@ class PagerdutyHook(BaseHook):
     hook_name = "Pagerduty"
 
     @staticmethod
-    def get_ui_field_behaviour() -> Dict:
+    def get_ui_field_behaviour() -> dict[str, Any]:
         """Returns custom field behaviour"""
         return {
-            "hidden_fields": ['port', 'login', 'schema', 'host'],
+            "hidden_fields": ["port", "login", "schema", "host"],
             "relabeling": {
-                'password': 'Pagerduty API token',
+                "password": "Pagerduty API token",
             },
         }
 
-    def __init__(self, token: Optional[str] = None, pagerduty_conn_id: Optional[str] = None) -> None:
+    def __init__(self, token: str | None = None, pagerduty_conn_id: str | None = None) -> None:
         super().__init__()
         self.routing_key = None
         self._session = None
@@ -75,7 +77,7 @@ class PagerdutyHook(BaseHook):
             self.token = token
 
         if self.token is None:
-            raise AirflowException('Cannot get token: No valid api token nor pagerduty_conn_id supplied.')
+            raise AirflowException("Cannot get token: No valid api token nor pagerduty_conn_id supplied.")
 
     def get_session(self) -> pdpyras.APISession:
         """
@@ -96,57 +98,44 @@ class PagerdutyHook(BaseHook):
         severity: str,
         source: str = "airflow",
         action: str = "trigger",
-        routing_key: Optional[str] = None,
-        dedup_key: Optional[str] = None,
-        custom_details: Optional[Any] = None,
-        group: Optional[str] = None,
-        component: Optional[str] = None,
-        class_type: Optional[str] = None,
-        images: Optional[List[Any]] = None,
-        links: Optional[List[Any]] = None,
-    ) -> Dict:
+        routing_key: str | None = None,
+        dedup_key: str | None = None,
+        custom_details: Any | None = None,
+        group: str | None = None,
+        component: str | None = None,
+        class_type: str | None = None,
+        images: list[Any] | None = None,
+        links: list[Any] | None = None,
+    ) -> dict:
         """
         Create event for service integration.
 
         :param summary: Summary for the event
-        :type summary: str
         :param severity: Severity for the event, needs to be one of: info, warning, error, critical
-        :type severity: str
         :param source: Specific human-readable unique identifier, such as a
             hostname, for the system having the problem.
-        :type source: str
         :param action: Event action, needs to be one of: trigger, acknowledge,
             resolve. Default to trigger if not specified.
-        :type action: str
         :param routing_key: Integration key. If not specified, will try to read
             from connection's extra json blob.
-        :type routing_key: str
         :param dedup_key: A string which identifies the alert triggered for the given event.
             Required for the actions acknowledge and resolve.
-        :type dedup_key: str
         :param custom_details: Free-form details from the event. Can be a dictionary or a string.
             If a dictionary is passed it will show up in PagerDuty as a table.
-        :type custom_details: dict or str
         :param group: A cluster or grouping of sources. For example, sources
-            “prod-datapipe-02” and “prod-datapipe-03” might both be part of “prod-datapipe”
-        :type group: str
+            "prod-datapipe-02" and "prod-datapipe-03" might both be part of "prod-datapipe"
         :param component: The part or component of the affected system that is broken.
-        :type component: str
         :param class_type: The class/type of the event.
-        :type class_type: str
         :param images: List of images to include. Each dictionary in the list accepts the following keys:
             `src`: The source (URL) of the image being attached to the incident. This image must be served via
             HTTPS.
             `href`: [Optional] URL to make the image a clickable link.
             `alt`: [Optional] Alternative text for the image.
-        :type images: list[dict]
         :param links: List of links to include. Each dictionary in the list accepts the following keys:
             `href`: URL of the link to be attached.
             `text`: [Optional] Plain text that describes the purpose of the link, and can be used as the
             link's text.
-        :type links: list[dict]
         :return: PagerDuty Events API v2 response.
-        :rtype: dict
         """
         warnings.warn(
             "This method will be deprecated. Please use the "

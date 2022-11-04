@@ -15,13 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from cryptography.fernet import InvalidToken as InvalidFernetToken
 from sqlalchemy import Boolean, Column, Integer, String, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import Session, reconstructor, synonym
 
@@ -47,7 +48,7 @@ class Variable(Base, LoggingMixin):
 
     id = Column(Integer, primary_key=True)
     key = Column(String(ID_LEN), unique=True)
-    _val = Column('val', Text)
+    _val = Column('val', Text().with_variant(MEDIUMTEXT, 'mysql'))
     description = Column(Text)
     is_encrypted = Column(Boolean, unique=False, default=False)
 
@@ -68,6 +69,8 @@ class Variable(Base, LoggingMixin):
 
     def get_val(self):
         """Get Airflow Variable from Metadata DB and decode it using the Fernet Key"""
+        from cryptography.fernet import InvalidToken as InvalidFernetToken
+
         if self._val is not None and self.is_encrypted:
             try:
                 fernet = get_fernet()
@@ -100,10 +103,8 @@ class Variable(Base, LoggingMixin):
         for a key, and if it isn't there, stores the default value and returns it.
 
         :param key: Dict key for this Variable
-        :type key: str
         :param default: Default value to set and return if the variable
             isn't already in the DB
-        :type default: Mixed
         :param deserialize_json: Store this as a JSON encoded value in the DB
             and un-encode it when retrieving a value
         :return: Mixed
@@ -129,7 +130,7 @@ class Variable(Base, LoggingMixin):
         Gets a value for an Airflow Variable Key
 
         :param key: Variable Key
-        :param default_var: Default value of the Variable if the Variable doesn't exists
+        :param default_var: Default value of the Variable if the Variable doesn't exist
         :param deserialize_json: Deserialize the value to a Python dict
         """
         var_val = Variable.get_variable_from_secrets(key=key)
@@ -153,7 +154,7 @@ class Variable(Base, LoggingMixin):
         cls,
         key: str,
         value: Any,
-        description: str = None,
+        description: str | None = None,
         serialize_json: bool = False,
         session: Session = None,
     ):
@@ -255,7 +256,7 @@ class Variable(Base, LoggingMixin):
             return None
 
     @staticmethod
-    def get_variable_from_secrets(key: str) -> Optional[str]:
+    def get_variable_from_secrets(key: str) -> str | None:
         """
         Get Airflow Variable by iterating over all Secret Backends.
 

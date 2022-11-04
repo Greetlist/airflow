@@ -15,13 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import posixpath
 from functools import wraps
 from shutil import copyfileobj
-from typing import Optional
 
 import smbclient
+import smbprotocol.connection
 
 from airflow.hooks.base import BaseHook
 
@@ -33,19 +34,17 @@ class SambaHook(BaseHook):
     set up a session and disconnect open connections upon exit.
 
     :param samba_conn_id: The connection id reference.
-    :type samba_conn_id: str
     :param share:
         An optional share name. If this is unset then the "schema" field of
         the connection is used in its place.
-    :type share: str
     """
 
-    conn_name_attr = 'samba_conn_id'
-    default_conn_name = 'samba_default'
-    conn_type = 'samba'
-    hook_name = 'Samba'
+    conn_name_attr = "samba_conn_id"
+    default_conn_name = "samba_default"
+    conn_type = "samba"
+    hook_name = "Samba"
 
-    def __init__(self, samba_conn_id: str = default_conn_name, share: Optional[str] = None) -> None:
+    def __init__(self, samba_conn_id: str = default_conn_name, share: str | None = None) -> None:
         super().__init__()
         conn = self.get_connection(samba_conn_id)
 
@@ -55,9 +54,11 @@ class SambaHook(BaseHook):
         if not conn.password:
             self.log.info("Password not provided")
 
+        connection_cache: dict[str, smbprotocol.connection.Connection] = {}
+
         self._host = conn.host
         self._share = share or conn.schema
-        self._connection_cache = connection_cache = {}
+        self._connection_cache = connection_cache
         self._conn_kwargs = {
             "username": conn.login,
             "password": conn.password,

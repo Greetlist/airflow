@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget, BS3TextFieldWidget
 from flask_appbuilder.widgets import RenderTemplateWidget
 from markupsafe import Markup
@@ -72,3 +74,9 @@ class BS3TextAreaROWidget(BS3TextAreaFieldWidget):
     def __call__(self, field, **kwargs):
         kwargs['readonly'] = 'true'
         return super().__call__(field, **kwargs)
+
+
+class AirflowVariableShowWidget(RenderTemplateWidget):
+    """Airflow variable show widget"""
+
+    template = 'airflow/variable_show_widget.html'

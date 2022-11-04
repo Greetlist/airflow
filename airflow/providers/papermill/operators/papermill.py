@@ -15,7 +15,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Dict, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 import attr
 import papermill as pm
@@ -23,15 +25,18 @@ import papermill as pm
 from airflow.lineage.entities import File
 from airflow.models import BaseOperator
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 
 @attr.s(auto_attribs=True)
 class NoteBook(File):
     """Jupyter notebook"""
 
-    type_hint: Optional[str] = "jupyter_notebook"
-    parameters: Optional[Dict] = {}
+    type_hint: str | None = "jupyter_notebook"
+    parameters: dict | None = {}
 
-    meta_schema: str = __name__ + '.NoteBook'
+    meta_schema: str = __name__ + ".NoteBook"
 
 
 class PapermillOperator(BaseOperator):
@@ -39,23 +44,24 @@ class PapermillOperator(BaseOperator):
     Executes a jupyter notebook through papermill that is annotated with parameters
 
     :param input_nb: input notebook (can also be a NoteBook or a File inlet)
-    :type input_nb: str
     :param output_nb: output notebook (can also be a NoteBook or File outlet)
-    :type output_nb: str
     :param parameters: the notebook parameters to set
-    :type parameters: dict
+    :param kernel_name: (optional) name of kernel to execute the notebook against
+        (ignores kernel name in the notebook document metadata)
     """
 
     supports_lineage = True
 
-    template_fields = ('input_nb', 'output_nb', 'parameters')
+    template_fields: Sequence[str] = ("input_nb", "output_nb", "parameters", "kernel_name", "language_name")
 
     def __init__(
         self,
         *,
-        input_nb: Optional[str] = None,
-        output_nb: Optional[str] = None,
-        parameters: Optional[Dict] = None,
+        input_nb: str | None = None,
+        output_nb: str | None = None,
+        parameters: dict | None = None,
+        kernel_name: str | None = None,
+        language_name: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -63,12 +69,14 @@ class PapermillOperator(BaseOperator):
         self.input_nb = input_nb
         self.output_nb = output_nb
         self.parameters = parameters
+        self.kernel_name = kernel_name
+        self.language_name = language_name
         if input_nb:
             self.inlets.append(NoteBook(url=input_nb, parameters=self.parameters))
         if output_nb:
             self.outlets.append(NoteBook(url=output_nb))
 
-    def execute(self, context):
+    def execute(self, context: Context):
         if not self.inlets or not self.outlets:
             raise ValueError("Input notebook or output notebook is not specified")
 
@@ -79,4 +87,6 @@ class PapermillOperator(BaseOperator):
                 parameters=item.parameters,
                 progress_bar=False,
                 report_mode=True,
+                kernel_name=self.kernel_name,
+                language=self.language_name,
             )

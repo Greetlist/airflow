@@ -15,11 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """
 Example Airflow DAG that shows the complex DAG structure.
 """
-from datetime import datetime
+from __future__ import annotations
+
+import pendulum
 
 from airflow import models
 from airflow.models.baseoperator import chain
@@ -27,8 +28,8 @@ from airflow.operators.bash import BashOperator
 
 with models.DAG(
     dag_id="example_complex",
-    schedule_interval=None,
-    start_date=datetime(2021, 1, 1),
+    schedule=None,
+    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     tags=['example', 'example2', 'example3'],
 ) as dag:

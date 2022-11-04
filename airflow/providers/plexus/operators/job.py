@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -33,7 +34,6 @@ class PlexusJobOperator(BaseOperator):
     Submits a Plexus job.
 
     :param job_params: parameters required to launch a job.
-    :type job_params: dict
 
     Required job parameters are the following
         - "name": job name created by user.
@@ -44,7 +44,7 @@ class PlexusJobOperator(BaseOperator):
 
     """
 
-    def __init__(self, job_params: Dict, **kwargs) -> None:
+    def __init__(self, job_params: dict, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.job_params = job_params
@@ -122,14 +122,14 @@ class PlexusJobOperator(BaseOperator):
             for dct in results:
                 if dct[mapping[0]] == mapping[1]:
                     v = dct[key]
-                if param == 'app':
-                    self.is_service = dct['is_service']
+                if param == "app":
+                    self.is_service = dct["is_service"]
         if v is None:
             raise AirflowException(f"Could not locate value for param:{key} at endpoint: {endpoint}")
 
         return v
 
-    def construct_job_params(self, hook: Any) -> Dict[Any, Optional[Any]]:
+    def construct_job_params(self, hook: Any) -> dict[Any, Any | None]:
         """
         Creates job_params dict for api call to
         launch a Plexus job.
@@ -143,7 +143,6 @@ class PlexusJobOperator(BaseOperator):
         user-provided value.
 
         :param hook: plexus hook object
-        :type hook: airflow hook
         """
         missing_params = self.required_params - set(self.job_params)
         if len(missing_params) > 0:

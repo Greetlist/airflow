@@ -1,6 +1,6 @@
 ---
 name: Airflow Providers Bug report
-description: Problems and issues with code of Apache Airflow Provider
+description: Problems and issues with code in Apache Airflow Providers
 labels: ["kind:bug", "area:providers"]
 body:
   - type: markdown
@@ -10,11 +10,11 @@ body:
         <img src='https://raw.githubusercontent.com/apache/airflow/main/docs/apache-airflow/img/logos/airflow_64x64_emoji_transparent.png' align='left' width='80' height='80'>
         Thank you for finding the time to report a problem!
 
-        We really appreciate the community efforts to improve Airflow.
+        We really appreciate the community's efforts to improve Airflow.
 
-        Note, that you do not need to create an issue if you have a change ready to submit!
+        Note, you do not need to create an issue if you have a change ready to submit!
 
-        You can open [Pull Request](https://github.com/apache/airflow/pulls) immediately instead.
+        You can open a [pull request](https://github.com/apache/airflow/pulls) immediately instead.
         <br clear='left'/>"
       # yamllint enable rule:line-length
   - type: dropdown
@@ -38,12 +38,16 @@ body:
         - apache-pinot
         - apache-spark
         - apache-sqoop
+        - arangodb
         - asana
+        - atlassian-jira
         - celery
         - cloudant
         - cncf-kubernetes
+        - common-sql
         - databricks
         - datadog
+        - dbt-cloud
         - dingding
         - discord
         - docker
@@ -51,6 +55,7 @@ body:
         - exasol
         - facebook
         - ftp
+        - github
         - google
         - grpc
         - hashicorp
@@ -59,7 +64,6 @@ body:
         - influxdb
         - jdbc
         - jenkins
-        - jira
         - microsoft-azure
         - microsoft-mssql
         - microsoft-psrp
@@ -89,6 +93,7 @@ body:
         - sqlite
         - ssh
         - tableau
+        - tabular
         - telegram
         - trino
         - vertica
@@ -101,26 +106,12 @@ body:
       label: Versions of Apache Airflow Providers
       description: What Apache Airflow Providers versions are you using?
       placeholder: You can use `pip freeze | grep apache-airflow-providers` (you can leave only relevant ones)
-  - type: dropdown
+  - type: input
     attributes:
       label: Apache Airflow version
       description: >
-        What Apache Airflow version are you using? Only Airflow 2 is supported for bugs. If you wish to
-        discuss Airflow 1.10, open [Discussion](https://github.com/apache/airflow/discussions) instead!
-      multiple: false
-      options:
-        - "2.2.2 (latest released)"
-        - "2.2.1"
-        - "2.2.0"
-        - "2.1.4"
-        - "2.1.3"
-        - "2.1.2"
-        - "2.1.1"
-        - "2.1.0"
-        - "2.0.2"
-        - "2.0.1"
-        - "2.0.0"
-        - "main (development)"
+        What Apache Airflow version are you using?
+        [Only Airflow 2 is supported](https://github.com/apache/airflow#version-life-cycle) for bugs.
     validations:
       required: true
   - type: input
@@ -134,7 +125,7 @@ body:
     attributes:
       label: Deployment
       description: >
-        What kind of deployment do you have? If you use Managed Service, consider first using regular
+        What kind of deployment do you have? If you use a Managed Service, consider first using regular
         channels of reporting issues for the service.
       multiple: false
       options:
@@ -164,7 +155,7 @@ body:
         Please provide the context in which the problem occurred and explain what happened
   - type: textarea
     attributes:
-      label: What you expected to happen
+      label: What you think should happen instead
       description: What do you think went wrong?
       placeholder: >
         Please explain why you think the behaviour is erroneous. It is extremely helpful if you copy&paste
@@ -204,7 +195,8 @@ body:
   - type: checkboxes
     attributes:
       label: Code of Conduct
-      description: The Code of Conduct helps create a safe space for everyone. We require
+      description: >
+        The Code of Conduct helps create a safe space for everyone. We require
         that everyone agrees to it.
       options:
         - label: >

@@ -16,14 +16,15 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains sensors for AWS CloudFormation."""
-from typing import Optional
+from __future__ import annotations
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
+from typing import TYPE_CHECKING, Sequence
 
-from airflow.providers.amazon.aws.hooks.cloud_formation import AWSCloudFormationHook
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
+from airflow.compat.functools import cached_property
+from airflow.providers.amazon.aws.hooks.cloud_formation import CloudFormationHook
 from airflow.sensors.base import BaseSensorOperator
 
 
@@ -31,60 +32,62 @@ class CloudFormationCreateStackSensor(BaseSensorOperator):
     """
     Waits for a stack to be created successfully on AWS CloudFormation.
 
+    .. seealso::
+        For more information on how to use this sensor, take a look at the guide:
+        :ref:`howto/sensor:CloudFormationCreateStackSensor`
+
     :param stack_name: The name of the stack to wait for (templated)
-    :type stack_name: str
     :param aws_conn_id: ID of the Airflow connection where credentials and extra configuration are
         stored
-    :type aws_conn_id: str
     :param poke_interval: Time in seconds that the job should wait between each try
-    :type poke_interval: int
     """
 
-    template_fields = ['stack_name']
-    ui_color = '#C5CAE9'
+    template_fields: Sequence[str] = ("stack_name",)
+    ui_color = "#C5CAE9"
 
-    def __init__(self, *, stack_name, aws_conn_id='aws_default', region_name=None, **kwargs):
+    def __init__(self, *, stack_name, aws_conn_id="aws_default", region_name=None, **kwargs):
         super().__init__(**kwargs)
         self.stack_name = stack_name
         self.aws_conn_id = aws_conn_id
         self.region_name = region_name
 
-    def poke(self, context):
+    def poke(self, context: Context):
         stack_status = self.hook.get_stack_status(self.stack_name)
-        if stack_status == 'CREATE_COMPLETE':
+        if stack_status == "CREATE_COMPLETE":
             return True
-        if stack_status in ('CREATE_IN_PROGRESS', None):
+        if stack_status in ("CREATE_IN_PROGRESS", None):
             return False
-        raise ValueError(f'Stack {self.stack_name} in bad state: {stack_status}')
+        raise ValueError(f"Stack {self.stack_name} in bad state: {stack_status}")
 
     @cached_property
-    def hook(self) -> AWSCloudFormationHook:
-        """Create and return an AWSCloudFormationHook"""
-        return AWSCloudFormationHook(aws_conn_id=self.aws_conn_id, region_name=self.region_name)
+    def hook(self) -> CloudFormationHook:
+        """Create and return a CloudFormationHook"""
+        return CloudFormationHook(aws_conn_id=self.aws_conn_id, region_name=self.region_name)
 
 
 class CloudFormationDeleteStackSensor(BaseSensorOperator):
     """
     Waits for a stack to be deleted successfully on AWS CloudFormation.
 
+    .. seealso::
+        For more information on how to use this sensor, take a look at the guide:
+        :ref:`howto/sensor:CloudFormationDeleteStackSensor`
+
     :param stack_name: The name of the stack to wait for (templated)
-    :type stack_name: str
     :param aws_conn_id: ID of the Airflow connection where credentials and extra configuration are
         stored
-    :type aws_conn_id: str
     :param poke_interval: Time in seconds that the job should wait between each try
-    :type poke_interval: int
     """
 
-    template_fields = ['stack_name']
-    ui_color = '#C5CAE9'
+    template_fields: Sequence[str] = ("stack_name",)
+    ui_color = "#C5CAE9"
 
     def __init__(
         self,
         *,
         stack_name: str,
-        aws_conn_id: str = 'aws_default',
-        region_name: Optional[str] = None,
+        aws_conn_id: str = "aws_default",
+        region_name: str | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -92,15 +95,15 @@ class CloudFormationDeleteStackSensor(BaseSensorOperator):
         self.region_name = region_name
         self.stack_name = stack_name
 
-    def poke(self, context):
+    def poke(self, context: Context):
         stack_status = self.hook.get_stack_status(self.stack_name)
-        if stack_status in ('DELETE_COMPLETE', None):
+        if stack_status in ("DELETE_COMPLETE", None):
             return True
-        if stack_status == 'DELETE_IN_PROGRESS':
+        if stack_status == "DELETE_IN_PROGRESS":
             return False
-        raise ValueError(f'Stack {self.stack_name} in bad state: {stack_status}')
+        raise ValueError(f"Stack {self.stack_name} in bad state: {stack_status}")
 
     @cached_property
-    def hook(self) -> AWSCloudFormationHook:
-        """Create and return an AWSCloudFormationHook"""
-        return AWSCloudFormationHook(aws_conn_id=self.aws_conn_id, region_name=self.region_name)
+    def hook(self) -> CloudFormationHook:
+        """Create and return a CloudFormationHook"""
+        return CloudFormationHook(aws_conn_id=self.aws_conn_id, region_name=self.region_name)

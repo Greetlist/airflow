@@ -15,16 +15,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import datetime
 from unittest.mock import Mock, patch
 
 import pendulum
+import pytest
 
 from airflow import settings
 from airflow.models.skipmixin import SkipMixin
 from airflow.models.taskinstance import TaskInstance as TI
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.utils import timezone
 from airflow.utils.state import State
 from airflow.utils.types import DagRunType
@@ -45,13 +47,13 @@ class TestSkipMixin:
     def teardown_method(self):
         self.clean_db()
 
-    @patch('airflow.utils.timezone.utcnow')
+    @patch("airflow.utils.timezone.utcnow")
     def test_skip(self, mock_now, dag_maker):
         session = settings.Session()
-        now = datetime.datetime.utcnow().replace(tzinfo=pendulum.timezone('UTC'))
+        now = datetime.datetime.utcnow().replace(tzinfo=pendulum.timezone("UTC"))
         mock_now.return_value = now
-        with dag_maker('dag'):
-            tasks = [DummyOperator(task_id='task')]
+        with dag_maker("dag"):
+            tasks = [EmptyOperator(task_id="task")]
         dag_run = dag_maker.create_dagrun(
             run_type=DagRunType.MANUAL,
             execution_date=now,
@@ -60,29 +62,29 @@ class TestSkipMixin:
         SkipMixin().skip(dag_run=dag_run, execution_date=now, tasks=tasks, session=session)
 
         session.query(TI).filter(
-            TI.dag_id == 'dag',
-            TI.task_id == 'task',
+            TI.dag_id == "dag",
+            TI.task_id == "task",
             TI.state == State.SKIPPED,
             TI.start_date == now,
             TI.end_date == now,
         ).one()
 
-    @patch('airflow.utils.timezone.utcnow')
+    @patch("airflow.utils.timezone.utcnow")
     def test_skip_none_dagrun(self, mock_now, dag_maker):
         session = settings.Session()
-        now = datetime.datetime.utcnow().replace(tzinfo=pendulum.timezone('UTC'))
+        now = datetime.datetime.utcnow().replace(tzinfo=pendulum.timezone("UTC"))
         mock_now.return_value = now
         with dag_maker(
-            'dag',
+            "dag",
             session=session,
         ):
-            tasks = [DummyOperator(task_id='task')]
+            tasks = [EmptyOperator(task_id="task")]
         dag_maker.create_dagrun(execution_date=now)
         SkipMixin().skip(dag_run=None, execution_date=now, tasks=tasks, session=session)
 
         session.query(TI).filter(
-            TI.dag_id == 'dag',
-            TI.task_id == 'task',
+            TI.dag_id == "dag",
+            TI.task_id == "task",
             TI.state == State.SKIPPED,
             TI.start_date == now,
             TI.end_date == now,
@@ -94,13 +96,22 @@ class TestSkipMixin:
         assert not session.query.called
         assert not session.commit.called
 
-    def test_skip_all_except(self, dag_maker):
+    @pytest.mark.parametrize(
+        "branch_task_ids, expected_states",
+        [
+            (["task2"], {"task2": State.NONE, "task3": State.SKIPPED}),
+            ("task2", {"task2": State.NONE, "task3": State.SKIPPED}),
+            (None, {"task2": State.SKIPPED, "task3": State.SKIPPED}),
+            ([], {"task2": State.SKIPPED, "task3": State.SKIPPED}),
+        ],
+    )
+    def test_skip_all_except(self, dag_maker, branch_task_ids, expected_states):
         with dag_maker(
-            'dag_test_skip_all_except',
+            "dag_test_skip_all_except",
         ):
-            task1 = DummyOperator(task_id='task1')
-            task2 = DummyOperator(task_id='task2')
-            task3 = DummyOperator(task_id='task3')
+            task1 = EmptyOperator(task_id="task1")
+            task2 = EmptyOperator(task_id="task2")
+            task3 = EmptyOperator(task_id="task3")
 
             task1 >> [task2, task3]
         dag_maker.create_dagrun()
@@ -109,11 +120,12 @@ class TestSkipMixin:
         ti2 = TI(task2, execution_date=DEFAULT_DATE)
         ti3 = TI(task3, execution_date=DEFAULT_DATE)
 
-        SkipMixin().skip_all_except(ti=ti1, branch_task_ids=['task2'])
+        SkipMixin().skip_all_except(ti=ti1, branch_task_ids=branch_task_ids)
 
         def get_state(ti):
             ti.refresh_from_db()
             return ti.state
 
-        assert get_state(ti2) == State.NONE
-        assert get_state(ti3) == State.SKIPPED
+        executed_states = {"task2": get_state(ti2), "task3": get_state(ti3)}
+
+        assert executed_states == expected_states

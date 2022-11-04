@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import unittest
 from unittest import mock
@@ -22,14 +24,14 @@ from unittest import mock
 from moto import mock_s3
 
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.amazon.aws.operators.s3_bucket_tagging import (
+from airflow.providers.amazon.aws.operators.s3 import (
     S3DeleteBucketTaggingOperator,
     S3GetBucketTaggingOperator,
     S3PutBucketTaggingOperator,
 )
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "test-airflow-bucket")
-TAG_SET = [{'Key': 'Color', 'Value': 'Green'}]
+TAG_SET = [{"Key": "Color", "Value": "Green"}]
 TASK_ID = os.environ.get("TASK_ID", "test-s3-operator")
 
 

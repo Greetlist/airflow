@@ -15,14 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import ast
-from typing import Dict, Iterable, List, Mapping, Optional, Union
+from __future__ import annotations
 
-from airflow.models import BaseOperator
-from airflow.providers.mysql.hooks.mysql import MySqlHook
+import warnings
+from typing import Sequence
+
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
 
-class MySqlOperator(BaseOperator):
+class MySqlOperator(SQLExecuteQueryOperator):
     """
     Executes sql code in a specific MySQL database
 
@@ -34,48 +35,35 @@ class MySqlOperator(BaseOperator):
         sql statement, a list of str (sql statements), or reference to a template file.
         Template reference are recognized by str ending in '.sql'
         (templated)
-    :type sql: str or list[str]
     :param mysql_conn_id: Reference to :ref:`mysql connection id <howto/connection:mysql>`.
-    :type mysql_conn_id: str
     :param parameters: (optional) the parameters to render the SQL query with.
         Template reference are recognized by str ending in '.json'
         (templated)
-    :type parameters: dict or iterable
     :param autocommit: if True, each command is automatically committed.
         (default value: False)
-    :type autocommit: bool
     :param database: name of database which overwrite defined one in connection
-    :type database: str
     """
 
-    template_fields = ('sql', 'parameters')
-    template_fields_renderers = {'sql': 'sql', 'parameters': 'json'}
-    template_ext = ('.sql', '.json')
-    ui_color = '#ededed'
+    template_fields: Sequence[str] = ("sql", "parameters")
+    template_fields_renderers = {
+        "sql": "mysql",
+        "parameters": "json",
+    }
+    template_ext: Sequence[str] = (".sql", ".json")
+    ui_color = "#ededed"
 
     def __init__(
-        self,
-        *,
-        sql: Union[str, List[str]],
-        mysql_conn_id: str = 'mysql_default',
-        parameters: Optional[Union[Mapping, Iterable]] = None,
-        autocommit: bool = False,
-        database: Optional[str] = None,
-        **kwargs,
+        self, *, mysql_conn_id: str = "mysql_default", database: str | None = None, **kwargs
     ) -> None:
-        super().__init__(**kwargs)
-        self.mysql_conn_id = mysql_conn_id
-        self.sql = sql
-        self.autocommit = autocommit
-        self.parameters = parameters
-        self.database = database
+        if database is not None:
+            hook_params = kwargs.pop("hook_params", {})
+            kwargs["hook_params"] = {"schema": database, **hook_params}
 
-    def prepare_template(self) -> None:
-        """Parse template file for attribute parameters."""
-        if isinstance(self.parameters, str):
-            self.parameters = ast.literal_eval(self.parameters)
-
-    def execute(self, context: Dict) -> None:
-        self.log.info('Executing: %s', self.sql)
-        hook = MySqlHook(mysql_conn_id=self.mysql_conn_id, schema=self.database)
-        hook.run(self.sql, autocommit=self.autocommit, parameters=self.parameters)
+        super().__init__(conn_id=mysql_conn_id, **kwargs)
+        warnings.warn(
+            """This class is deprecated.
+            Please use `airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator`.
+            Also, you can provide `hook_params={'schema': <database>}`.""",
+            DeprecationWarning,
+            stacklevel=2,
+        )

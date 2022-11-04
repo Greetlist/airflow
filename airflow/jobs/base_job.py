@@ -15,10 +15,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 from time import sleep
-from typing import Optional
 
 from sqlalchemy import Column, Index, Integer, String
 from sqlalchemy.exc import OperationalError
@@ -29,9 +28,7 @@ from airflow.compat.functools import cached_property
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.executors.executor_loader import ExecutorLoader
-from airflow.models import DagRun
 from airflow.models.base import ID_LEN, Base
-from airflow.models.taskinstance import TaskInstance
 from airflow.stats import Stats
 from airflow.utils import timezone
 from airflow.utils.helpers import convert_camel_to_snake
@@ -41,6 +38,12 @@ from airflow.utils.platform import getuser
 from airflow.utils.session import create_session, provide_session
 from airflow.utils.sqlalchemy import UtcDateTime
 from airflow.utils.state import State
+
+
+def _resolve_dagrun_model():
+    from airflow.models.dagrun import DagRun
+
+    return DagRun
 
 
 class BaseJob(Base, LoggingMixin):
@@ -71,18 +74,19 @@ class BaseJob(Base, LoggingMixin):
     __table_args__ = (
         Index('job_type_heart', job_type, latest_heartbeat),
         Index('idx_job_state_heartbeat', state, latest_heartbeat),
+        Index('idx_job_dag_id', dag_id),
     )
 
     task_instances_enqueued = relationship(
-        TaskInstance,
-        primaryjoin=id == foreign(TaskInstance.queued_by_job_id),
+        "TaskInstance",
+        primaryjoin="BaseJob.id == foreign(TaskInstance.queued_by_job_id)",
         backref=backref('queued_by_job', uselist=False),
     )
 
     dag_runs = relationship(
-        DagRun,
-        primaryjoin=id == foreign(DagRun.creating_job_id),
-        backref=backref('creating_job'),
+        "DagRun",
+        primaryjoin=lambda: BaseJob.id == foreign(_resolve_dagrun_model().creating_job_id),
+        backref='creating_job',
     )
 
     """
@@ -114,7 +118,7 @@ class BaseJob(Base, LoggingMixin):
 
     @classmethod
     @provide_session
-    def most_recent_job(cls, session=None) -> Optional['BaseJob']:
+    def most_recent_job(cls, session=None) -> BaseJob | None:
         """
         Return the most recent job of this type, if any, based on last
         heartbeat received.
@@ -123,7 +127,6 @@ class BaseJob(Base, LoggingMixin):
         return jobs of that type.
 
         :param session: Database session
-        :rtype: BaseJob or None
         """
         return session.query(cls).order_by(cls.latest_heartbeat.desc()).limit(1).first()
 
@@ -136,8 +139,6 @@ class BaseJob(Base, LoggingMixin):
 
         :param grace_multiplier: multiplier of heartrate to require heart beat
             within
-        :type grace_multiplier: number
-        :rtype: boolean
         """
         return (
             self.state == State.RUNNING
@@ -185,7 +186,6 @@ class BaseJob(Base, LoggingMixin):
 
         :param only_if_necessary: If the heartbeat is not yet due then do
             nothing (don't update column, don't call ``heartbeat_callback``)
-        :type only_if_necessary: boolean
         """
         seconds_remaining = 0
         if self.latest_heartbeat:

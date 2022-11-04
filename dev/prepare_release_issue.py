@@ -15,6 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 import os
@@ -22,9 +23,9 @@ import re
 import subprocess
 import textwrap
 from collections import defaultdict
-from typing import Any, Dict, List, NamedTuple, Optional, Set
+from typing import Any, NamedTuple, Union
 
-import click
+import rich_click as click
 from github import Github, Issue, PullRequest, UnknownObjectException
 from rich.console import Console
 from rich.progress import Progress
@@ -33,13 +34,15 @@ logger = logging.getLogger(__name__)
 
 console = Console(width=400, color_system="standard")
 
+PullRequestOrIssue = Union[PullRequest.PullRequest, Issue.Issue]
+
 MY_DIR_PATH = os.path.dirname(__file__)
 SOURCE_DIR_PATH = os.path.abspath(os.path.join(MY_DIR_PATH, os.pardir))
 PR_PATTERN = re.compile(r".*\(#([0-9]+)\)")
 ISSUE_MATCH_IN_BODY = re.compile(r" #([0-9]+)[^0-9]")
 
 
-@click.group(context_settings={'help_option_names': ['-h', '--help'], 'max_content_width': 500})
+@click.group(context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 500})
 def cli():
     ...
 
@@ -70,16 +73,16 @@ option_github_token = click.option(
     required=True,
     help=textwrap.dedent(
         """
-        Github token used to authenticate.
+        GitHub token used to authenticate.
         You can set omit it if you have GITHUB_TOKEN env variable set
         Can be generated with:
         https://github.com/settings/tokens/new?description=Read%20sssues&scopes=repo:status"""
     ),
-    envvar='GITHUB_TOKEN',
+    envvar="GITHUB_TOKEN",
 )
 
 option_excluded_pr_list = click.option(
-    "--excluded-pr-list", type=str, default='', help="Coma-separated list of PRs to exclude from the issue."
+    "--excluded-pr-list", type=str, default="", help="Coma-separated list of PRs to exclude from the issue."
 )
 
 option_limit_pr_count = click.option(
@@ -89,10 +92,19 @@ option_limit_pr_count = click.option(
     help="Limit PR count processes (useful for testing small subset of PRs).",
 )
 
+option_is_helm_chart = click.option(
+    "--is-helm-chart",
+    is_flag=True,
+    help="Whether the release is for helm chart or not.",
+)
+
 
 def get_git_log_command(
-    verbose: bool, from_commit: Optional[str] = None, to_commit: Optional[str] = None
-) -> List[str]:
+    verbose: bool,
+    from_commit: str | None = None,
+    to_commit: str | None = None,
+    is_helm_chart: bool = True,
+) -> list[str]:
     """
     Get git command to run for the current repo from the current folder (which is the package folder).
     :param verbose: whether to print verbose info while getting the command
@@ -110,7 +122,10 @@ def get_git_log_command(
         git_cmd.append(f"{from_commit}...{to_commit}")
     elif from_commit:
         git_cmd.append(from_commit)
-    git_cmd.extend(['--', '.'])
+    if is_helm_chart:
+        git_cmd.extend(["--", "chart/"])
+    else:
+        git_cmd.extend(["--", "."])
     if verbose:
         console.print(f"Command to run: '{' '.join(git_cmd)}'")
     return git_cmd
@@ -124,7 +139,7 @@ class Change(NamedTuple):
     date: str
     message: str
     message_without_backticks: str
-    pr: Optional[int]
+    pr: int | None
 
 
 def get_change_from_line(line: str):
@@ -139,23 +154,27 @@ def get_change_from_line(line: str):
         short_hash=split_line[1],
         date=split_line[2],
         message=message,
-        message_without_backticks=message.replace("`", "'").replace("&39;", "'"),
+        message_without_backticks=message.replace("`", "'").replace("&#39;", "'").replace("&amp;", "&"),
         pr=int(pr) if pr else None,
     )
 
 
-def get_changes(verbose: bool, previous_release: str, current_release: str) -> List[Change]:
+def get_changes(
+    verbose: bool, previous_release: str, current_release: str, is_helm_chart: bool = False
+) -> list[Change]:
     change_strings = subprocess.check_output(
-        get_git_log_command(verbose, from_commit=previous_release, to_commit=current_release),
+        get_git_log_command(
+            verbose, from_commit=previous_release, to_commit=current_release, is_helm_chart=is_helm_chart
+        ),
         cwd=SOURCE_DIR_PATH,
-        universal_newlines=True,
+        text=True,
     )
     return [get_change_from_line(line) for line in change_strings.split("\n")]
 
 
 def render_template(
     template_name: str,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     autoescape: bool = True,
     keep_trailing_newline: bool = False,
 ) -> str:
@@ -183,27 +202,34 @@ def render_template(
 
 def print_issue_content(
     current_release: str,
-    pull_requests: Dict[int, PullRequest.PullRequest],
-    linked_issues: Dict[int, List[Issue.Issue]],
-    users: Dict[int, Set[str]],
+    pull_requests: dict[int, PullRequestOrIssue],
+    linked_issues: dict[int, list[Issue.Issue]],
+    users: dict[int, set[str]],
+    is_helm_chart: bool = False,
 ):
+    link = f"https://pypi.org/project/apache-airflow/{current_release}/"
+    link_text = f"Apache Airflow RC {current_release}"
+    if is_helm_chart:
+        link = f"https://dist.apache.org/repos/dist/dev/airflow/{current_release}"
+        link_text = f"Apache Airflow Helm Chart {current_release.split('/')[-1]}"
     pr_list = list(pull_requests.keys())
     pr_list.sort()
-    user_logins: Dict[int, str] = {pr: "@" + " @".join(users[pr]) for pr in users}
-    all_users: Set[str] = set()
+    user_logins: dict[int, str] = {pr: "@" + " @".join(users[pr]) for pr in users}
+    all_users: set[str] = set()
     for user_list in users.values():
         all_users.update(user_list)
     all_user_logins = "@" + " @".join(all_users)
     content = render_template(
-        template_name='ISSUE',
+        template_name="ISSUE",
         context={
-            'version': current_release,
-            'pr_list': pr_list,
-            'pull_requests': pull_requests,
-            'linked_issues': linked_issues,
-            'users': users,
-            'user_logins': user_logins,
-            'all_user_logins': all_user_logins,
+            "link": link,
+            "link_text": link_text,
+            "pr_list": pr_list,
+            "pull_requests": pull_requests,
+            "linked_issues": linked_issues,
+            "users": users,
+            "user_logins": user_logins,
+            "all_user_logins": all_user_logins,
         },
         autoescape=False,
         keep_trailing_newline=True,
@@ -218,27 +244,29 @@ def print_issue_content(
 @option_excluded_pr_list
 @option_verbose
 @option_limit_pr_count
+@option_is_helm_chart
 def generate_issue_content(
     github_token: str,
     previous_release: str,
     current_release: str,
     excluded_pr_list: str,
     verbose: bool,
-    limit_pr_count: Optional[int],
+    limit_pr_count: int | None,
+    is_helm_chart: bool,
 ):
     if excluded_pr_list:
         excluded_prs = [int(pr) for pr in excluded_pr_list.split(",")]
     else:
         excluded_prs = []
-    changes = get_changes(verbose, previous_release, current_release)
-    prs = list(
-        filter(lambda pr: pr is not None and pr not in excluded_prs, [change.pr for change in changes])
-    )
+    changes = get_changes(verbose, previous_release, current_release, is_helm_chart)
+    change_prs = [change.pr for change in changes]
+    prs = [pr for pr in change_prs if pr is not None and pr not in excluded_prs]
+
     g = Github(github_token)
     repo = g.get_repo("apache/airflow")
-    pull_requests: Dict[int, PullRequest.PullRequest] = {}
-    linked_issues: Dict[int, List[Issue.Issue]] = defaultdict(lambda: [])
-    users: Dict[int, Set[str]] = defaultdict(lambda: set())
+    pull_requests: dict[int, PullRequestOrIssue] = {}
+    linked_issues: dict[int, list[Issue.Issue]] = defaultdict(lambda: [])
+    users: dict[int, set[str]] = defaultdict(lambda: set())
     count_prs = len(prs)
     if limit_pr_count:
         count_prs = limit_pr_count
@@ -247,8 +275,10 @@ def generate_issue_content(
         for i in range(count_prs):
             pr_number = prs[i]
             progress.console.print(
-                f"Retrieving PR#{pr_number}: " f"https://github.com/apache/airflow/pull/{pr_number}"
+                f"Retrieving PR#{pr_number}: https://github.com/apache/airflow/pull/{pr_number}"
             )
+
+            pr: PullRequestOrIssue
             try:
                 pr = repo.get_pull(pr_number)
             except UnknownObjectException:
@@ -257,14 +287,22 @@ def generate_issue_content(
                     pr = repo.get_issue(pr_number)  # (same fields as PR)
                 except UnknownObjectException:
                     console.print(f"[red]The PR #{pr_number} could not be found[/]")
+                    continue
+
+            # Ignore doc-only and skipped PRs
+            label_names = [label.name for label in pr.labels]
+            if "type:doc-only" in label_names or "changelog:skip" in label_names:
                 continue
+
             pull_requests[pr_number] = pr
             # GitHub does not have linked issues in PR - but we quite rigorously add Fixes/Closes
             # Relate so we can find those from the body
             if pr.body:
                 body = pr.body.replace("\n", " ").replace("\r", " ")
-                for issue_match in ISSUE_MATCH_IN_BODY.finditer(body):
-                    linked_issue_number = int(issue_match.group(1))
+                linked_issue_numbers = {
+                    int(issue_match.group(1)) for issue_match in ISSUE_MATCH_IN_BODY.finditer(body)
+                }
+                for linked_issue_number in linked_issue_numbers:
                     progress.console.print(
                         f"Retrieving Linked issue PR#{linked_issue_number}: "
                         f"https://github.com/apache/airflow/issue/{linked_issue_number}"
@@ -279,7 +317,7 @@ def generate_issue_content(
             for linked_issue in linked_issues[pr_number]:
                 users[pr_number].add(linked_issue.user.login)
             progress.advance(task)
-    print_issue_content(current_release, pull_requests, linked_issues, users)
+    print_issue_content(current_release, pull_requests, linked_issues, users, is_helm_chart)
 
 
 if __name__ == "__main__":

@@ -15,13 +15,18 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Level DB"""
-from typing import List, Optional
+from __future__ import annotations
 
-import plyvel
-from plyvel import DB
-
-from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowException, AirflowOptionalProviderFeatureException
 from airflow.hooks.base import BaseHook
+
+try:
+    import plyvel
+    from plyvel import DB
+except ImportError as e:
+    raise AirflowOptionalProviderFeatureException(e)
+
+DB_NOT_INITIALIZED_BEFORE = "The `get_conn` method should be called before!"
 
 
 class LevelDBHookException(AirflowException):
@@ -34,29 +39,25 @@ class LevelDBHook(BaseHook):
     `LevelDB Connection Documentation <https://plyvel.readthedocs.io/en/latest/>`__
     """
 
-    conn_name_attr = 'leveldb_conn_id'
-    default_conn_name = 'leveldb_default'
-    conn_type = 'leveldb'
-    hook_name = 'LevelDB'
+    conn_name_attr = "leveldb_conn_id"
+    default_conn_name = "leveldb_default"
+    conn_type = "leveldb"
+    hook_name = "LevelDB"
 
     def __init__(self, leveldb_conn_id: str = default_conn_name):
         super().__init__()
         self.leveldb_conn_id = leveldb_conn_id
         self.connection = self.get_connection(leveldb_conn_id)
-        self.db = None
+        self.db: plyvel.DB | None = None
 
-    def get_conn(self, name: str = '/tmp/testdb/', create_if_missing: bool = False, **kwargs) -> DB:
+    def get_conn(self, name: str = "/tmp/testdb/", create_if_missing: bool = False, **kwargs) -> DB:
         """
         Creates `Plyvel DB <https://plyvel.readthedocs.io/en/latest/api.html#DB>`__
 
         :param name: path to create database e.g. `/tmp/testdb/`)
-        :type name: str
         :param create_if_missing: whether a new database should be created if needed
-        :type create_if_missing: bool
         :param kwargs: other options of creation plyvel.DB. See more in the link above.
-        :type kwargs: Dict[str, Any]
         :returns: DB
-        :rtype: plyvel.DB
         """
         if self.db is not None:
             return self.db
@@ -74,34 +75,34 @@ class LevelDBHook(BaseHook):
         self,
         command: str,
         key: bytes,
-        value: bytes = None,
-        keys: List[bytes] = None,
-        values: List[bytes] = None,
-    ) -> Optional[bytes]:
+        value: bytes | None = None,
+        keys: list[bytes] | None = None,
+        values: list[bytes] | None = None,
+    ) -> bytes | None:
         """
         Execute operation with leveldb
 
         :param command: command of plyvel(python wrap for leveldb) for DB object e.g.
             ``"put"``, ``"get"``, ``"delete"``, ``"write_batch"``.
-        :type command: str
         :param key: key for command(put,get,delete) execution(, e.g. ``b'key'``, ``b'another-key'``)
-        :type key: bytes
         :param value: value for command(put) execution(bytes, e.g. ``b'value'``, ``b'another-value'``)
-        :type value: bytes
-        :param keys: keys for command(write_batch) execution(List[bytes], e.g. ``[b'key', b'another-key'])``
-        :type keys: List[bytes]
+        :param keys: keys for command(write_batch) execution(list[bytes], e.g. ``[b'key', b'another-key'])``
         :param values: values for command(write_batch) execution e.g. ``[b'value'``, ``b'another-value']``
-        :type values: List[bytes]
         :returns: value from get or None
-        :rtype: Optional[bytes]
         """
-        if command == 'put':
+        if command == "put":
+            if not value:
+                raise Exception("Please provide `value`!")
             return self.put(key, value)
-        elif command == 'get':
+        elif command == "get":
             return self.get(key)
-        elif command == 'delete':
+        elif command == "delete":
             return self.delete(key)
-        elif command == 'write_batch':
+        elif command == "write_batch":
+            if not keys:
+                raise Exception("Please provide `keys`!")
+            if not values:
+                raise Exception("Please provide `values`!")
             return self.write_batch(keys, values)
         else:
             raise LevelDBHookException("Unknown command for LevelDB hook")
@@ -111,10 +112,10 @@ class LevelDBHook(BaseHook):
         Put a single value into a leveldb db by key
 
         :param key: key for put execution, e.g. ``b'key'``, ``b'another-key'``
-        :type key: bytes
         :param value: value for put execution e.g. ``b'value'``, ``b'another-value'``
-        :type value: bytes
         """
+        if not self.db:
+            raise Exception(DB_NOT_INITIALIZED_BEFORE)
         self.db.put(key, value)
 
     def get(self, key: bytes) -> bytes:
@@ -122,10 +123,10 @@ class LevelDBHook(BaseHook):
         Get a single value into a leveldb db by key
 
         :param key: key for get execution, e.g. ``b'key'``, ``b'another-key'``
-        :type key: bytes
         :returns: value of key from db.get
-        :rtype: bytes
         """
+        if not self.db:
+            raise Exception(DB_NOT_INITIALIZED_BEFORE)
         return self.db.get(key)
 
     def delete(self, key: bytes):
@@ -133,19 +134,20 @@ class LevelDBHook(BaseHook):
         Delete a single value in a leveldb db by key.
 
         :param key: key for delete execution, e.g. ``b'key'``, ``b'another-key'``
-        :type key: bytes
         """
+        if not self.db:
+            raise Exception(DB_NOT_INITIALIZED_BEFORE)
         self.db.delete(key)
 
-    def write_batch(self, keys: List[bytes], values: List[bytes]):
+    def write_batch(self, keys: list[bytes], values: list[bytes]):
         """
         Write batch of values in a leveldb db by keys
 
         :param keys: keys for write_batch execution e.g. ``[b'key', b'another-key']``
-        :type keys: List[bytes]
         :param values: values for write_batch execution e.g. ``[b'value', b'another-value']``
-        :type values: List[bytes]
         """
+        if not self.db:
+            raise Exception(DB_NOT_INITIALIZED_BEFORE)
         with self.db.write_batch() as batch:
             for i, key in enumerate(keys):
                 batch.put(key, values[i])

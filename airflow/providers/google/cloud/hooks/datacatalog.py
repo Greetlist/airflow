@@ -14,9 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Sequence
 
+from google.api_core.gapic_v1.method import DEFAULT, _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud import datacatalog
 from google.cloud.datacatalog import (
@@ -32,7 +34,8 @@ from google.cloud.datacatalog import (
 from google.protobuf.field_mask_pb2 import FieldMask
 
 from airflow import AirflowException
-from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
+from airflow.providers.google.common.consts import CLIENT_INFO
+from airflow.providers.google.common.hooks.base_google import PROVIDE_PROJECT_ID, GoogleBaseHook
 
 
 class CloudDataCatalogHook(GoogleBaseHook):
@@ -40,11 +43,9 @@ class CloudDataCatalogHook(GoogleBaseHook):
     Hook for Google Cloud Data Catalog Service.
 
     :param gcp_conn_id: The connection ID to use when fetching connection info.
-    :type gcp_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -53,28 +54,25 @@ class CloudDataCatalogHook(GoogleBaseHook):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account.
-    :type impersonation_chain: Union[str, Sequence[str]]
     """
 
     def __init__(
         self,
         gcp_conn_id: str = "google_cloud_default",
-        delegate_to: Optional[str] = None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delegate_to: str | None = None,
+        impersonation_chain: str | Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             gcp_conn_id=gcp_conn_id,
             delegate_to=delegate_to,
             impersonation_chain=impersonation_chain,
         )
-        self._client: Optional[DataCatalogClient] = None
+        self._client: DataCatalogClient | None = None
 
     def get_conn(self) -> DataCatalogClient:
         """Retrieves client library object that allow access to Cloud Data Catalog service."""
         if not self._client:
-            self._client = DataCatalogClient(
-                credentials=self._get_credentials(), client_info=self.client_info
-            )
+            self._client = DataCatalogClient(credentials=self.get_credentials(), client_info=CLIENT_INFO)
         return self._client
 
     @GoogleBaseHook.fallback_to_default_project_id
@@ -83,11 +81,11 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         entry_group: str,
         entry_id: str,
-        entry: Union[dict, Entry],
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        entry: dict | Entry,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Entry:
         """
         Creates an entry.
@@ -95,37 +93,29 @@ class CloudDataCatalogHook(GoogleBaseHook):
         Currently only entries of 'FILESET' type can be created.
 
         :param location: Required. The location of the entry to create.
-        :type location: str
         :param entry_group: Required. Entry group ID under which the entry is created.
-        :type entry_group: str
         :param entry_id: Required. The id of the entry to create.
-        :type entry_id: str
         :param entry: Required. The entry to create.
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.Entry`
-        :type entry: Union[Dict, google.cloud.datacatalog_v1beta1.types.Entry]
         :param project_id: The ID of the Google Cloud project that owns the entry.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If set to ``None`` or missing, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         parent = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}"
-        self.log.info('Creating a new entry: parent=%s', parent)
+        self.log.info("Creating a new entry: parent=%s", parent)
         result = client.create_entry(
-            request={'parent': parent, 'entry_id': entry_id, 'entry': entry},
+            request={"parent": parent, "entry_id": entry_id, "entry": entry},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Created a entry: name=%s', result.name)
+        self.log.info("Created a entry: name=%s", result.name)
         return result
 
     @GoogleBaseHook.fallback_to_default_project_id
@@ -133,49 +123,42 @@ class CloudDataCatalogHook(GoogleBaseHook):
         self,
         location: str,
         entry_group_id: str,
-        entry_group: Union[Dict, EntryGroup],
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        entry_group: dict | EntryGroup,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> EntryGroup:
         """
         Creates an EntryGroup.
 
         :param location: Required. The location of the entry group to create.
-        :type location: str
         :param entry_group_id: Required. The id of the entry group to create. The id must begin with a letter
             or underscore, contain only English letters, numbers and underscores, and be at most 64
             characters.
-        :type entry_group_id: str
         :param entry_group: The entry group to create. Defaults to an empty entry group.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.EntryGroup`
-        :type entry_group: Union[Dict, google.cloud.datacatalog_v1beta1.types.EntryGroup]
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         parent = f"projects/{project_id}/locations/{location}"
-        self.log.info('Creating a new entry group: parent=%s', parent)
+        self.log.info("Creating a new entry group: parent=%s", parent)
 
         result = client.create_entry_group(
-            request={'parent': parent, 'entry_group_id': entry_group_id, 'entry_group': entry_group},
+            request={"parent": parent, "entry_group_id": entry_group_id, "entry_group": entry_group},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Created a entry group: name=%s', result.name)
+        self.log.info("Created a entry group: name=%s", result.name)
 
         return result
 
@@ -185,39 +168,30 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         entry_group: str,
         entry: str,
-        tag: Union[dict, Tag],
-        project_id: str,
-        template_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        tag: dict | Tag,
+        project_id: str = PROVIDE_PROJECT_ID,
+        template_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Tag:
         """
         Creates a tag on an entry.
 
         :param location: Required. The location of the tag to create.
-        :type location: str
         :param entry_group: Required. Entry group ID under which the tag is created.
-        :type entry_group: str
         :param entry: Required. Entry group ID under which the tag is created.
-        :type entry: str
         :param tag: Required. The tag to create.
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.Tag`
-        :type tag: Union[Dict, google.cloud.datacatalog_v1beta1.types.Tag]
         :param template_id: Required. Template ID used to create tag
-        :type template_id: Optional[str]
         :param project_id: The ID of the Google Cloud project that owns the tag.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if template_id:
@@ -228,16 +202,16 @@ class CloudDataCatalogHook(GoogleBaseHook):
                 tag["template"] = template_path
         parent = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}/entries/{entry}"
 
-        self.log.info('Creating a new tag: parent=%s', parent)
+        self.log.info("Creating a new tag: parent=%s", parent)
         # HACK: google-cloud-datacatalog has problems with mapping messages where the value is not a
         # primitive type, so we need to convert it manually.
         # See: https://github.com/googleapis/python-datacatalog/issues/84
         if isinstance(tag, dict):
             tag = Tag(
-                name=tag.get('name'),
-                template=tag.get('template'),
-                template_display_name=tag.get('template_display_name'),
-                column=tag.get('column'),
+                name=tag.get("name"),
+                template=tag.get("template"),
+                template_display_name=tag.get("template_display_name"),
+                column=tag.get("column"),
                 fields={
                     k: datacatalog.TagField(**v) if isinstance(v, dict) else v
                     for k, v in tag.get("fields", {}).items()
@@ -249,7 +223,7 @@ class CloudDataCatalogHook(GoogleBaseHook):
         )
 
         result = client.create_tag(request=request, retry=retry, timeout=timeout, metadata=metadata or ())
-        self.log.info('Created a tag: name=%s', result.name)
+        self.log.info("Created a tag: name=%s", result.name)
 
         return result
 
@@ -258,40 +232,33 @@ class CloudDataCatalogHook(GoogleBaseHook):
         self,
         location,
         tag_template_id: str,
-        tag_template: Union[dict, TagTemplate],
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        tag_template: dict | TagTemplate,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> TagTemplate:
         """
         Creates a tag template.
 
         :param location: Required. The location of the tag template to create.
-        :type location: str
         :param tag_template_id: Required. The id of the tag template to create.
-        :type tag_template_id: str
         :param tag_template: Required. The tag template to create.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.TagTemplate`
-        :type tag_template: Union[Dict, google.cloud.datacatalog_v1beta1.types.TagTemplate]
         :param project_id: The ID of the Google Cloud project that owns the tag template.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         parent = f"projects/{project_id}/locations/{location}"
 
-        self.log.info('Creating a new tag template: parent=%s', parent)
+        self.log.info("Creating a new tag template: parent=%s", parent)
         # HACK: google-cloud-datacatalog has problems with mapping messages where the value is not a
         # primitive type, so we need to convert it manually.
         # See: https://github.com/googleapis/python-datacatalog/issues/84
@@ -312,9 +279,9 @@ class CloudDataCatalogHook(GoogleBaseHook):
             request=request,
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Created a tag template: name=%s', result.name)
+        self.log.info("Created a tag template: name=%s", result.name)
 
         return result
 
@@ -324,58 +291,50 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         tag_template: str,
         tag_template_field_id: str,
-        tag_template_field: Union[dict, TagTemplateField],
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        tag_template_field: dict | TagTemplateField,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> TagTemplateField:
         r"""
         Creates a field in a tag template.
 
         :param location: Required. The location of the tag template field to create.
-        :type location: str
         :param tag_template: Required. The id of the tag template to create.
-        :type tag_template: str
         :param tag_template_field_id: Required. The ID of the tag template field to create. Field ids can
             contain letters (both uppercase and lowercase), numbers (0-9), underscores (\_) and dashes (-).
             Field IDs must be at least 1 character long and at most 128 characters long. Field IDs must also
             be unique within their template.
-        :type tag_template_field_id: str
         :param tag_template_field: Required. The tag template field to create.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.TagTemplateField`
-        :type tag_template_field: Union[Dict, google.cloud.datacatalog_v1beta1.types.TagTemplateField]
         :param project_id: The ID of the Google Cloud project that owns the tag template field.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         parent = f"projects/{project_id}/locations/{location}/tagTemplates/{tag_template}"
 
-        self.log.info('Creating a new tag template field: parent=%s', parent)
+        self.log.info("Creating a new tag template field: parent=%s", parent)
 
         result = client.create_tag_template_field(
             request={
-                'parent': parent,
-                'tag_template_field_id': tag_template_field_id,
-                'tag_template_field': tag_template_field,
+                "parent": parent,
+                "tag_template_field_id": tag_template_field_id,
+                "tag_template_field": tag_template_field,
             },
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Created a tag template field: name=%s', result.name)
+        self.log.info("Created a tag template field: name=%s", result.name)
 
         return result
 
@@ -385,47 +344,40 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         entry_group: str,
         entry: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         Deletes an existing entry.
 
         :param location: Required. The location of the entry to delete.
-        :type location: str
         :param entry_group: Required. Entry group ID for entries that is deleted.
-        :type entry_group: str
         :param entry: Entry ID that is deleted.
-        :type entry: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}/entries/{entry}"
-        self.log.info('Deleting a entry: name=%s', name)
-        client.delete_entry(request={'name': name}, retry=retry, timeout=timeout, metadata=metadata or ())
-        self.log.info('Deleted a entry: name=%s', name)
+        self.log.info("Deleting a entry: name=%s", name)
+        client.delete_entry(request={"name": name}, retry=retry, timeout=timeout, metadata=metadata or ())
+        self.log.info("Deleted a entry: name=%s", name)
 
     @GoogleBaseHook.fallback_to_default_project_id
     def delete_entry_group(
         self,
         location,
         entry_group,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         Deletes an EntryGroup.
@@ -433,29 +385,23 @@ class CloudDataCatalogHook(GoogleBaseHook):
         Only entry groups that do not contain entries can be deleted.
 
         :param location: Required. The location of the entry group to delete.
-        :type location: str
         :param entry_group: Entry group ID that is deleted.
-        :type entry_group: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}"
 
-        self.log.info('Deleting a entry group: name=%s', name)
+        self.log.info("Deleting a entry group: name=%s", name)
         client.delete_entry_group(
-            request={'name': name}, retry=retry, timeout=timeout, metadata=metadata or ()
+            request={"name": name}, retry=retry, timeout=timeout, metadata=metadata or ()
         )
-        self.log.info('Deleted a entry group: name=%s', name)
+        self.log.info("Deleted a entry group: name=%s", name)
 
     @GoogleBaseHook.fallback_to_default_project_id
     def delete_tag(
@@ -464,42 +410,34 @@ class CloudDataCatalogHook(GoogleBaseHook):
         entry_group: str,
         entry: str,
         tag: str,
-        project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        project_id: str = PROVIDE_PROJECT_ID,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         Deletes a tag.
 
         :param location: Required. The location of the tag to delete.
-        :type location: str
         :param entry_group: Entry group ID for tag that is deleted.
-        :type entry_group: str
         :param entry: Entry  ID for tag that is deleted.
-        :type entry: str
         :param tag: Identifier for TAG that is deleted.
-        :type tag: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = (
             f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}/entries/{entry}/tags/{tag}"
         )
 
-        self.log.info('Deleting a tag: name=%s', name)
-        client.delete_tag(request={'name': name}, retry=retry, timeout=timeout, metadata=metadata or ())
-        self.log.info('Deleted a tag: name=%s', name)
+        self.log.info("Deleting a tag: name=%s", name)
+        client.delete_tag(request={"name": name}, retry=retry, timeout=timeout, metadata=metadata or ())
+        self.log.info("Deleted a tag: name=%s", name)
 
     @GoogleBaseHook.fallback_to_default_project_id
     def delete_tag_template(
@@ -508,41 +446,34 @@ class CloudDataCatalogHook(GoogleBaseHook):
         tag_template,
         force: bool,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         Deletes a tag template and all tags using the template.
 
         :param location: Required. The location of the tag template to delete.
-        :type location: str
         :param tag_template: ID for tag template that is deleted.
-        :type tag_template: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param force: Required. Currently, this field must always be set to ``true``. This confirms the
             deletion of any possible tags using this template. ``force = false`` will be supported in the
             future.
-        :type force: bool
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/tagTemplates/{tag_template}"
 
-        self.log.info('Deleting a tag template: name=%s', name)
+        self.log.info("Deleting a tag template: name=%s", name)
         client.delete_tag_template(
-            request={'name': name, 'force': force}, retry=retry, timeout=timeout, metadata=metadata or ()
+            request={"name": name, "force": force}, retry=retry, timeout=timeout, metadata=metadata or ()
         )
-        self.log.info('Deleted a tag template: name=%s', name)
+        self.log.info("Deleted a tag template: name=%s", name)
 
     @GoogleBaseHook.fallback_to_default_project_id
     def delete_tag_template_field(
@@ -552,41 +483,33 @@ class CloudDataCatalogHook(GoogleBaseHook):
         field: str,
         force: bool,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> None:
         """
         Deletes a field in a tag template and all uses of that field.
 
         :param location: Required. The location of the tag template to delete.
-        :type location: str
         :param tag_template: Tag Template ID for tag template field that is deleted.
-        :type tag_template: str
         :param field: Name of field that is deleted.
-        :type field: str
         :param force: Required. This confirms the deletion of this field from any tags using this field.
-        :type force: bool
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/tagTemplates/{tag_template}/fields/{field}"
 
-        self.log.info('Deleting a tag template field: name=%s', name)
+        self.log.info("Deleting a tag template field: name=%s", name)
         client.delete_tag_template_field(
-            request={'name': name, 'force': force}, retry=retry, timeout=timeout, metadata=metadata or ()
+            request={"name": name, "force": force}, retry=retry, timeout=timeout, metadata=metadata or ()
         )
-        self.log.info('Deleted a tag template field: name=%s', name)
+        self.log.info("Deleted a tag template field: name=%s", name)
 
     @GoogleBaseHook.fallback_to_default_project_id
     def get_entry(
@@ -595,39 +518,32 @@ class CloudDataCatalogHook(GoogleBaseHook):
         entry_group: str,
         entry: str,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Entry:
         """
         Gets an entry.
 
         :param location: Required. The location of the entry to get.
-        :type location: str
         :param entry_group: Required. The entry group of the entry to get.
-        :type entry_group: str
         :param entry: The ID of the entry to get.
-        :type entry: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}/entries/{entry}"
 
-        self.log.info('Getting a entry: name=%s', name)
+        self.log.info("Getting a entry: name=%s", name)
         result = client.get_entry(
-            request={'name': name}, retry=retry, timeout=timeout, metadata=metadata or ()
+            request={"name": name}, retry=retry, timeout=timeout, metadata=metadata or ()
         )
-        self.log.info('Received a entry: name=%s', result.name)
+        self.log.info("Received a entry: name=%s", result.name)
 
         return result
 
@@ -637,48 +553,41 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         entry_group: str,
         project_id: str,
-        read_mask: Union[Dict, FieldMask] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        read_mask: FieldMask | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> EntryGroup:
         """
         Gets an entry group.
 
         :param location: Required. The location of the entry group to get.
-        :type location: str
         :param entry_group: The ID of the entry group to get.
-        :type entry_group: str
         :param read_mask: The fields to return. If not set or empty, all fields are returned.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.protobuf.field_mask_pb2.FieldMask`
-        :type read_mask: Union[Dict, google.protobuf.field_mask_pb2.FieldMask]
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}"
 
-        self.log.info('Getting a entry group: name=%s', name)
+        self.log.info("Getting a entry group: name=%s", name)
 
         result = client.get_entry_group(
-            request={'name': name, 'read_mask': read_mask},
+            request={"name": name, "read_mask": read_mask},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Received a entry group: name=%s', result.name)
+        self.log.info("Received a entry group: name=%s", result.name)
 
         return result
 
@@ -688,39 +597,33 @@ class CloudDataCatalogHook(GoogleBaseHook):
         location: str,
         tag_template: str,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> TagTemplate:
         """
         Gets a tag template.
 
         :param location: Required. The location of the tag template to get.
-        :type location: str
         :param tag_template: Required. The ID of the tag template to get.
-        :type tag_template: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/tagTemplates/{tag_template}"
 
-        self.log.info('Getting a tag template: name=%s', name)
+        self.log.info("Getting a tag template: name=%s", name)
 
         result = client.get_tag_template(
-            request={'name': name}, retry=retry, timeout=timeout, metadata=metadata or ()
+            request={"name": name}, retry=retry, timeout=timeout, metadata=metadata or ()
         )
 
-        self.log.info('Received a tag template: name=%s', result.name)
+        self.log.info("Received a tag template: name=%s", result.name)
 
         return result
 
@@ -732,48 +635,40 @@ class CloudDataCatalogHook(GoogleBaseHook):
         entry: str,
         project_id: str,
         page_size: int = 100,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         """
         Lists the tags on an Entry.
 
         :param location: Required. The location of the tags to get.
-        :type location: str
         :param entry_group: Required. The entry group of the tags to get.
-        :type entry_group: str
         :param entry_group: Required. The entry of the tags to get.
-        :type entry: str
         :param page_size: The maximum number of resources contained in the underlying API response. If page
             streaming is performed per- resource, this parameter does not affect the return value. If page
             streaming is performed per-page, this determines the maximum number of resources in a page.
-        :type page_size: int
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         parent = f"projects/{project_id}/locations/{location}/entryGroups/{entry_group}/entries/{entry}"
 
-        self.log.info('Listing tag on entry: entry_name=%s', parent)
+        self.log.info("Listing tag on entry: entry_name=%s", parent)
 
         result = client.list_tags(
-            request={'parent': parent, 'page_size': page_size},
+            request={"parent": parent, "page_size": page_size},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Received tags.')
+        self.log.info("Received tags.")
 
         return result
 
@@ -785,32 +680,24 @@ class CloudDataCatalogHook(GoogleBaseHook):
         entry: str,
         template_name: str,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Tag:
         """
         Gets for a tag with a specific template for a specific entry.
 
         :param location: Required. The location which contains the entry to search for.
-        :type location: str
         :param entry_group: The entry group ID which contains the entry to search for.
-        :type entry_group: str
         :param entry:  The name of the entry to search for.
-        :type entry: str
         :param template_name: The name of the template that will be the search criterion.
-        :type template_name: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         tags_list = self.list_tags(
             location=location,
@@ -826,11 +713,11 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
     def lookup_entry(
         self,
-        linked_resource: Optional[str] = None,
-        sql_resource: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        linked_resource: str | None = None,
+        sql_resource: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Entry:
         r"""
         Get an entry by target resource name.
@@ -842,17 +729,12 @@ class CloudDataCatalogHook(GoogleBaseHook):
             represents. See: https://cloud.google.com/apis/design/resource\_names#full\_resource\_name. Full
             names are case-sensitive.
 
-        :type linked_resource: str
         :param sql_resource: The SQL name of the entry. SQL names are case-sensitive.
-        :type sql_resource: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if linked_resource and sql_resource:
@@ -862,22 +744,22 @@ class CloudDataCatalogHook(GoogleBaseHook):
             raise AirflowException("At least one of linked_resource, sql_resource should be set.")
 
         if linked_resource:
-            self.log.info('Getting entry: linked_resource=%s', linked_resource)
+            self.log.info("Getting entry: linked_resource=%s", linked_resource)
             result = client.lookup_entry(
-                request={'linked_resource': linked_resource},
+                request={"linked_resource": linked_resource},
                 retry=retry,
                 timeout=timeout,
-                metadata=metadata or (),
+                metadata=metadata,
             )
         else:
-            self.log.info('Getting entry: sql_resource=%s', sql_resource)
+            self.log.info("Getting entry: sql_resource=%s", sql_resource)
             result = client.lookup_entry(
-                request={'sql_resource': sql_resource},
+                request={"sql_resource": sql_resource},
                 retry=retry,
                 timeout=timeout,
-                metadata=metadata or (),
+                metadata=metadata,
             )
-        self.log.info('Received entry. name=%s', result.name)
+        self.log.info("Received entry. name=%s", result.name)
 
         return result
 
@@ -889,62 +771,54 @@ class CloudDataCatalogHook(GoogleBaseHook):
         field: str,
         new_tag_template_field_id: str,
         project_id: str,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> TagTemplateField:
         """
         Renames a field in a tag template.
 
         :param location: Required. The location of the tag template field to rename.
-        :type location: str
         :param tag_template: The tag template ID for field that is renamed.
-        :type tag_template: str
         :param field: Required. The old ID of this tag template field. For example,
             ``my_old_field``.
-        :type field: str
         :param new_tag_template_field_id: Required. The new ID of this tag template field. For example,
             ``my_new_field``.
-        :type new_tag_template_field_id: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         name = f"projects/{project_id}/locations/{location}/tagTemplates/{tag_template}/fields/{field}"
 
         self.log.info(
-            'Renaming field: old_name=%s, new_tag_template_field_id=%s', name, new_tag_template_field_id
+            "Renaming field: old_name=%s, new_tag_template_field_id=%s", name, new_tag_template_field_id
         )
 
         result = client.rename_tag_template_field(
-            request={'name': name, 'new_tag_template_field_id': new_tag_template_field_id},
+            request={"name": name, "new_tag_template_field_id": new_tag_template_field_id},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Renamed tag template field.')
+        self.log.info("Renamed tag template field.")
 
         return result
 
     def search_catalog(
         self,
-        scope: Union[Dict, SearchCatalogRequest.Scope],
+        scope: dict | SearchCatalogRequest.Scope,
         query: str,
         page_size: int = 100,
-        order_by: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        order_by: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         r"""
         Searches Data Catalog for multiple resources like entries, tags that match a query.
@@ -960,7 +834,6 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.Scope`
-        :type scope: Union[Dict, google.cloud.datacatalog_v1beta1.types.SearchCatalogRequest.Scope]
         :param query: Required. The query string in search query syntax. The query must be non-empty.
 
             Query strings can be simple as "x" or more qualified as:
@@ -972,11 +845,9 @@ class CloudDataCatalogHook(GoogleBaseHook):
             Note: Query tokens need to have a minimum of 3 characters for substring matching to work
             correctly. See `Data Catalog Search Syntax <https://cloud.google.com/data-catalog/docs/how-
             to/search-reference>`__ for more information.
-        :type query: str
         :param page_size: The maximum number of resources contained in the underlying API response. If page
             streaming is performed per-resource, this parameter does not affect the return value. If page
             streaming is performed per-page, this determines the maximum number of resources in a page.
-        :type page_size: int
         :param order_by: Specifies the ordering of results, currently supported case-sensitive choices are:
 
             -  ``relevance``, only supports descending
@@ -984,15 +855,11 @@ class CloudDataCatalogHook(GoogleBaseHook):
             -  ``last_modified_timestamp [asc|desc]``, defaults to descending if not specified
 
             If not specified, defaults to ``relevance`` descending.
-        :type order_by: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
 
@@ -1004,28 +871,28 @@ class CloudDataCatalogHook(GoogleBaseHook):
             order_by,
         )
         result = client.search_catalog(
-            request={'scope': scope, 'query': query, 'page_size': page_size, 'order_by': order_by},
+            request={"scope": scope, "query": query, "page_size": page_size, "order_by": order_by},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Received items.')
+        self.log.info("Received items.")
 
         return result
 
     @GoogleBaseHook.fallback_to_default_project_id
     def update_entry(
         self,
-        entry: Union[Dict, Entry],
-        update_mask: Union[dict, FieldMask],
+        entry: dict | Entry,
+        update_mask: dict | FieldMask,
         project_id: str,
-        location: Optional[str] = None,
-        entry_group: Optional[str] = None,
-        entry_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        location: str | None = None,
+        entry_group: str | None = None,
+        entry_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Entry:
         """
         Updates an existing entry.
@@ -1034,30 +901,21 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.Entry`
-        :type entry: Union[Dict, google.cloud.datacatalog_v1beta1.types.Entry]
         :param update_mask: The fields to update on the entry. If absent or empty, all modifiable fields are
             updated.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.protobuf.field_mask_pb2.FieldMask`
-        :type update_mask: Union[Dict, google.protobuf.field_mask_pb2.FieldMask]
         :param location: Required. The location of the entry to update.
-        :type location: str
         :param entry_group: The entry group ID for the entry that is being updated.
-        :type entry_group: str
         :param entry_id: The entry ID that is being updated.
-        :type entry_id: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if project_id and location and entry_group and entry_id:
@@ -1082,29 +940,29 @@ class CloudDataCatalogHook(GoogleBaseHook):
         if isinstance(entry, dict):
             entry = Entry(**entry)
         result = client.update_entry(
-            request={'entry': entry, 'update_mask': update_mask},
+            request={"entry": entry, "update_mask": update_mask},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
 
-        self.log.info('Updated entry.')
+        self.log.info("Updated entry.")
 
         return result
 
     @GoogleBaseHook.fallback_to_default_project_id
     def update_tag(
         self,
-        tag: Union[Dict, Tag],
-        update_mask: Union[Dict, FieldMask],
+        tag: dict | Tag,
+        update_mask: dict | FieldMask,
         project_id: str,
-        location: Optional[str] = None,
-        entry_group: Optional[str] = None,
-        entry: Optional[str] = None,
-        tag_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        location: str | None = None,
+        entry_group: str | None = None,
+        entry: str | None = None,
+        tag_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> Tag:
         """
         Updates an existing tag.
@@ -1113,32 +971,22 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.Tag`
-        :type tag: Union[Dict, google.cloud.datacatalog_v1beta1.types.Tag]
         :param update_mask: The fields to update on the Tag. If absent or empty, all modifiable fields are
             updated. Currently the only modifiable field is the field ``fields``.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.FieldMask`
-        :type update_mask: Union[Dict, google.protobuf.field_mask_pb2.FieldMask]
         :param location: Required. The location of the tag to rename.
-        :type location: str
         :param entry_group: The entry group ID for the tag that is being updated.
-        :type entry_group: str
         :param entry: The entry ID for the tag that is being updated.
-        :type entry: str
         :param tag_id: The tag ID that is being updated.
-        :type tag_id: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if project_id and location and entry_group and entry and tag_id:
@@ -1165,26 +1013,26 @@ class CloudDataCatalogHook(GoogleBaseHook):
         if isinstance(tag, dict):
             tag = Tag(**tag)
         result = client.update_tag(
-            request={'tag': tag, 'update_mask': update_mask},
+            request={"tag": tag, "update_mask": update_mask},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Updated tag.')
+        self.log.info("Updated tag.")
 
         return result
 
     @GoogleBaseHook.fallback_to_default_project_id
     def update_tag_template(
         self,
-        tag_template: Union[dict, TagTemplate],
-        update_mask: Union[dict, FieldMask],
+        tag_template: dict | TagTemplate,
+        update_mask: dict | FieldMask,
         project_id: str,
-        location: Optional[str] = None,
-        tag_template_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        location: str | None = None,
+        tag_template_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ) -> TagTemplate:
         """
         Updates a tag template.
@@ -1197,29 +1045,21 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.TagTemplate`
-        :type tag_template: Union[Dict, google.cloud.datacatalog_v1beta1.types.TagTemplate]
         :param update_mask: The field mask specifies the parts of the template to overwrite.
 
             If absent or empty, all of the allowed fields above will be updated.
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.protobuf.field_mask_pb2.FieldMask`
-        :type update_mask: Union[Dict, google.protobuf.field_mask_pb2.FieldMask]
         :param location: Required. The location of the tag template to rename.
-        :type location: str
         :param tag_template_id: Optional. The tag template ID for the entry that is being updated.
-        :type tag_template_id: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if project_id and location and tag_template:
@@ -1245,28 +1085,28 @@ class CloudDataCatalogHook(GoogleBaseHook):
         if isinstance(tag_template, dict):
             tag_template = TagTemplate(**tag_template)
         result = client.update_tag_template(
-            request={'tag_template': tag_template, 'update_mask': update_mask},
+            request={"tag_template": tag_template, "update_mask": update_mask},
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Updated tag template.')
+        self.log.info("Updated tag template.")
 
         return result
 
     @GoogleBaseHook.fallback_to_default_project_id
     def update_tag_template_field(
         self,
-        tag_template_field: Union[dict, TagTemplateField],
-        update_mask: Union[dict, FieldMask],
+        tag_template_field: dict | TagTemplateField,
+        update_mask: dict | FieldMask,
         project_id: str,
-        tag_template_field_name: Optional[str] = None,
-        location: Optional[str] = None,
-        tag_template: Optional[str] = None,
-        tag_template_field_id: Optional[str] = None,
-        retry: Optional[Retry] = None,
-        timeout: Optional[float] = None,
-        metadata: Optional[Sequence[Tuple[str, str]]] = None,
+        tag_template_field_name: str | None = None,
+        location: str | None = None,
+        tag_template: str | None = None,
+        tag_template_field_id: str | None = None,
+        retry: Retry | _MethodDefault = DEFAULT,
+        timeout: float | None = None,
+        metadata: Sequence[tuple[str, str]] = (),
     ):
         """
         Updates a field in a tag template. This method cannot be used to update the field type.
@@ -1275,7 +1115,6 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.cloud.datacatalog_v1beta1.types.TagTemplateField`
-        :type tag_template_field: Union[Dict, google.cloud.datacatalog_v1beta1.types.TagTemplateField]
         :param update_mask: The field mask specifies the parts of the template to be updated. Allowed fields:
 
             -  ``display_name``
@@ -1288,26 +1127,17 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
             If a dict is provided, it must be of the same form as the protobuf message
             :class:`~google.protobuf.field_mask_pb2.FieldMask`
-        :type update_mask: Union[Dict, google.protobuf.field_mask_pb2.FieldMask]
         :param tag_template_field_name: Optional. The name of the tag template field to rename.
-        :type tag_template_field_name: str
         :param location: Optional. The location of the tag to rename.
-        :type location: str
         :param tag_template: Optional. The tag template ID for tag template field to rename.
-        :type tag_template: str
         :param tag_template_field_id: Optional. The ID of tag template field to rename.
-        :type tag_template_field_id: str
         :param project_id: The ID of the Google Cloud project that owns the entry group.
             If set to ``None`` or missing, the default project_id from the Google Cloud connection is used.
-        :type project_id: str
         :param retry: A retry object used to retry requests. If ``None`` is specified, requests will be
             retried using a default configuration.
-        :type retry: google.api_core.retry.Retry
         :param timeout: The amount of time, in seconds, to wait for the request to complete. Note that if
             ``retry`` is specified, the timeout applies to each individual attempt.
-        :type timeout: float
         :param metadata: Additional metadata that is provided to the method.
-        :type metadata: Sequence[Tuple[str, str]]
         """
         client = self.get_conn()
         if project_id and location and tag_template and tag_template_field_id:
@@ -1320,14 +1150,14 @@ class CloudDataCatalogHook(GoogleBaseHook):
 
         result = client.update_tag_template_field(
             request={
-                'name': tag_template_field_name,
-                'tag_template_field': tag_template_field,
-                'update_mask': update_mask,
+                "name": tag_template_field_name,
+                "tag_template_field": tag_template_field,
+                "update_mask": update_mask,
             },
             retry=retry,
             timeout=timeout,
-            metadata=metadata or (),
+            metadata=metadata,
         )
-        self.log.info('Updated tag template field.')
+        self.log.info("Updated tag template field.")
 
         return result

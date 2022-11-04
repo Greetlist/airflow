@@ -14,11 +14,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.microsoft.azure.hooks.data_lake import AzureDataLakeHook
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class ADLSDeleteOperator(BaseOperator):
@@ -30,17 +34,13 @@ class ADLSDeleteOperator(BaseOperator):
             :ref:`howto/operator:ADLSDeleteOperator`
 
     :param path: A directory or file to remove
-    :type path: str
     :param recursive: Whether to loop into directories in the location and remove the files
-    :type recursive: bool
     :param ignore_not_found: Whether to raise error if file to delete is not found
-    :type ignore_not_found: bool
     :param azure_data_lake_conn_id: Reference to the :ref:`Azure Data Lake connection<howto/connection:adl>`.
-    :type azure_data_lake_conn_id: str
     """
 
-    template_fields: Sequence[str] = ('path',)
-    ui_color = '#901dd2'
+    template_fields: Sequence[str] = ("path",)
+    ui_color = "#901dd2"
 
     def __init__(
         self,
@@ -48,7 +48,7 @@ class ADLSDeleteOperator(BaseOperator):
         path: str,
         recursive: bool = False,
         ignore_not_found: bool = True,
-        azure_data_lake_conn_id: str = 'azure_data_lake_default',
+        azure_data_lake_conn_id: str = "azure_data_lake_default",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -57,7 +57,7 @@ class ADLSDeleteOperator(BaseOperator):
         self.ignore_not_found = ignore_not_found
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
 
-    def execute(self, context: dict) -> Any:
+    def execute(self, context: Context) -> Any:
         hook = AzureDataLakeHook(azure_data_lake_conn_id=self.azure_data_lake_conn_id)
         return hook.remove(path=self.path, recursive=self.recursive, ignore_not_found=self.ignore_not_found)
 
@@ -71,9 +71,7 @@ class ADLSListOperator(BaseOperator):
 
     :param path: The Azure Data Lake path to find the objects. Supports glob
         strings (templated)
-    :type path: str
     :param azure_data_lake_conn_id: Reference to the :ref:`Azure Data Lake connection<howto/connection:adl>`.
-    :type azure_data_lake_conn_id: str
 
     **Example**:
         The following Operator would list all the Parquet files from ``folder/output/``
@@ -86,17 +84,17 @@ class ADLSListOperator(BaseOperator):
             )
     """
 
-    template_fields: Sequence[str] = ('path',)
-    ui_color = '#901dd2'
+    template_fields: Sequence[str] = ("path",)
+    ui_color = "#901dd2"
 
     def __init__(
-        self, *, path: str, azure_data_lake_conn_id: str = 'azure_data_lake_default', **kwargs
+        self, *, path: str, azure_data_lake_conn_id: str = "azure_data_lake_default", **kwargs
     ) -> None:
         super().__init__(**kwargs)
         self.path = path
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
 
-    def execute(self, context: dict) -> list:
+    def execute(self, context: Context) -> list:
         hook = AzureDataLakeHook(azure_data_lake_conn_id=self.azure_data_lake_conn_id)
-        self.log.info('Getting list of ADLS files in path: %s', self.path)
+        self.log.info("Getting list of ADLS files in path: %s", self.path)
         return hook.list(path=self.path)

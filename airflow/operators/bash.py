@@ -15,13 +15,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
-from typing import Dict, Optional
+import shutil
+from typing import Sequence
 
 from airflow.compat.functools import cached_property
 from airflow.exceptions import AirflowException, AirflowSkipException
 from airflow.hooks.subprocess import SubprocessHook
-from airflow.models import BaseOperator
+from airflow.models.baseoperator import BaseOperator
+from airflow.utils.context import Context
 from airflow.utils.operator_helpers import context_to_airflow_vars
 
 
@@ -38,26 +42,20 @@ class BashOperator(BaseOperator):
 
     :param bash_command: The command, set of commands or reference to a
         bash script (must be '.sh') to be executed. (templated)
-    :type bash_command: str
     :param env: If env is not None, it must be a dict that defines the
         environment variables for the new process; these are used instead
         of inheriting the current process environment, which is the default
         behavior. (templated)
-    :type env: dict
     :param append_env: If False(default) uses the environment variables passed in env params
         and does not inherit the current process environment. If True, inherits the environment variables
         from current passes and then environment variable passed by the user will either update the existing
         inherited environment variables or the new variables gets appended to it
-    :type append_env: bool
     :param output_encoding: Output encoding of bash command
-    :type output_encoding: str
     :param skip_exit_code: If task exits with this exit code, leave the task
         in ``skipped`` state (default: 99). If set to ``None``, any non-zero
         exit code will be treated as a failure.
-    :type skip_exit_code: int
     :param cwd: Working directory to execute the command in.
         If None (default), the command is run in a temporary directory.
-    :type cwd: str
 
     Airflow will evaluate the exit code of the bash command. In general, a non-zero exit code will result in
     task failure and zero will result in task success. Exit code ``99`` (or another set in ``skip_exit_code``)
@@ -127,9 +125,9 @@ class BashOperator(BaseOperator):
 
     """
 
-    template_fields = ('bash_command', 'env')
+    template_fields: Sequence[str] = ('bash_command', 'env')
     template_fields_renderers = {'bash_command': 'bash', 'env': 'json'}
-    template_ext = (
+    template_ext: Sequence[str] = (
         '.sh',
         '.bash',
     )
@@ -139,11 +137,11 @@ class BashOperator(BaseOperator):
         self,
         *,
         bash_command: str,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
         append_env: bool = False,
         output_encoding: str = 'utf-8',
         skip_exit_code: int = 99,
-        cwd: str = None,
+        cwd: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -153,8 +151,6 @@ class BashOperator(BaseOperator):
         self.skip_exit_code = skip_exit_code
         self.cwd = cwd
         self.append_env = append_env
-        if kwargs.get('xcom_push') is not None:
-            raise AirflowException("'xcom_push' was deprecated, use 'BaseOperator.do_xcom_push' instead")
 
     @cached_property
     def subprocess_hook(self):
@@ -180,7 +176,8 @@ class BashOperator(BaseOperator):
         env.update(airflow_context_vars)
         return env
 
-    def execute(self, context):
+    def execute(self, context: Context):
+        bash_path = shutil.which("bash") or "bash"
         if self.cwd is not None:
             if not os.path.exists(self.cwd):
                 raise AirflowException(f"Can not find the cwd: {self.cwd}")
@@ -188,7 +185,7 @@ class BashOperator(BaseOperator):
                 raise AirflowException(f"The cwd {self.cwd} must be a directory")
         env = self.get_env(context)
         result = self.subprocess_hook.run_command(
-            command=['bash', '-c', self.bash_command],
+            command=[bash_path, '-c', self.bash_command],
             env=env,
             output_encoding=self.output_encoding,
             cwd=self.cwd,

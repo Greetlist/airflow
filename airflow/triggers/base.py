@@ -14,9 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import abc
-from typing import Any, AsyncIterator, Dict, Tuple
+from typing import Any, AsyncIterator
 
 from airflow.utils.log.logging_mixin import LoggingMixin
 
@@ -35,11 +36,11 @@ class BaseTrigger(abc.ABC, LoggingMixin):
     let them be re-instantiated elsewhere.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         pass
 
     @abc.abstractmethod
-    def serialize(self) -> Tuple[str, Dict[str, Any]]:
+    def serialize(self) -> tuple[str, dict[str, Any]]:
         """
         Returns the information needed to reconstruct this Trigger.
 
@@ -65,6 +66,7 @@ class BaseTrigger(abc.ABC, LoggingMixin):
         and then rely on cleanup() being called when they are no longer needed.
         """
         raise NotImplementedError("Triggers must implement run()")
+        yield  # To convince Mypy this is an async iterator.
 
     def cleanup(self) -> None:
         """

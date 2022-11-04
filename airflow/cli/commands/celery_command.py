@@ -16,14 +16,14 @@
 # specific language governing permissions and limitations
 # under the License.
 """Celery command"""
+from __future__ import annotations
 
 from multiprocessing import Process
-from typing import Optional
 
 import daemon
 import psutil
 import sqlalchemy.exc
-from celery import maybe_patch_concurrency
+from celery import maybe_patch_concurrency  # type: ignore[attr-defined]
 from daemon.pidfile import TimeoutPIDLockFile
 from lockfile.pidlockfile import read_pid_from_pidfile, remove_existing_pidfile
 
@@ -37,7 +37,7 @@ from airflow.utils.serve_logs import serve_logs
 WORKER_PROCESS_NAME = "worker"
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def flower(args):
     """Starts Flower, Celery monitoring tool"""
     options = [
@@ -67,11 +67,15 @@ def flower(args):
             stderr=args.stderr,
             log=args.log_file,
         )
-        with open(stdout, "w+") as stdout, open(stderr, "w+") as stderr:
+        with open(stdout, "a") as stdout, open(stderr, "a") as stderr:
+            stdout.truncate(0)
+            stderr.truncate(0)
+
             ctx = daemon.DaemonContext(
                 pidfile=TimeoutPIDLockFile(pidfile, -1),
                 stdout=stdout,
                 stderr=stderr,
+                umask=int(settings.DAEMON_UMASK, 8),
             )
             with ctx:
                 celery_app.start(options)
@@ -79,7 +83,7 @@ def flower(args):
         celery_app.start(options)
 
 
-def _serve_logs(skip_serve_logs: bool = False) -> Optional[Process]:
+def _serve_logs(skip_serve_logs: bool = False) -> Process | None:
     """Starts serve_logs sub-process"""
     if skip_serve_logs is False:
         sub_proc = Process(target=serve_logs)
@@ -97,9 +101,11 @@ def _run_worker(options, skip_serve_logs):
             sub_proc.terminate()
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def worker(args):
     """Starts Airflow Celery worker"""
+    # Disable connection pool so that celery worker does not hold an unnecessary db connection
+    settings.reconfigure_orm(disable_connection_pool=True)
     if not settings.validate_session():
         raise SystemExit("Worker exiting, database connection precheck failed.")
 
@@ -134,6 +140,10 @@ def worker(args):
             # it, we raced to create the tables and lost.
             pass
 
+    # backwards-compatible: https://github.com/apache/airflow/pull/21506#pullrequestreview-879893763
+    celery_log_level = conf.get('logging', 'CELERY_LOGGING_LEVEL')
+    if not celery_log_level:
+        celery_log_level = conf.get('logging', 'LOGGING_LEVEL')
     # Setup Celery worker
     options = [
         'worker',
@@ -146,7 +156,7 @@ def worker(args):
         '--hostname',
         args.celery_hostname,
         '--loglevel',
-        conf.get('logging', 'LOGGING_LEVEL'),
+        celery_log_level,
         '--pidfile',
         pid_file_path,
     ]
@@ -171,9 +181,14 @@ def worker(args):
         # Run Celery worker as daemon
         handle = setup_logging(log_file)
 
-        with open(stdout, 'w+') as stdout_handle, open(stderr, 'w+') as stderr_handle:
+        with open(stdout, 'a') as stdout_handle, open(stderr, 'a') as stderr_handle:
             if args.umask:
                 umask = args.umask
+            else:
+                umask = conf.get('celery', 'worker_umask', fallback=settings.DAEMON_UMASK)
+
+            stdout_handle.truncate(0)
+            stderr_handle.truncate(0)
 
             ctx = daemon.DaemonContext(
                 files_preserve=[handle],
@@ -188,7 +203,7 @@ def worker(args):
         _run_worker(options=options, skip_serve_logs=skip_serve_logs)
 
 
-@cli_utils.action_logging
+@cli_utils.action_cli
 def stop_worker(args):
     """Sends SIGTERM to Celery worker"""
     # Read PID from file

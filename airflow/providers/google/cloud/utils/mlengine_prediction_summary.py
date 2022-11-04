@@ -101,7 +101,12 @@ To test outside of the dag:
             "--temp_location=gs://...",
         ]
     )
+
+.. spelling::
+
+    pcoll
 """
+from __future__ import annotations
 
 import argparse
 import base64
@@ -111,9 +116,10 @@ import os
 
 import apache_beam as beam
 import dill
+from apache_beam.coders.coders import Coder
 
 
-class JsonCoder:
+class JsonCoder(Coder):
     """JSON encoder/decoder."""
 
     @staticmethod
@@ -196,7 +202,7 @@ def run(argv=None):
             | "Write"
             >> beam.io.WriteToText(
                 prediction_summary_path,
-                shard_name_template='',  # without trailing -NNNNN-of-NNNNN.
+                shard_name_template="",  # without trailing -NNNNN-of-NNNNN.
                 coder=JsonCoder(),
             )
         )

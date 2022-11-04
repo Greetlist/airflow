@@ -15,18 +15,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
-from typing import Collection, Optional
+from typing import Collection
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
-from google.api_core.client_info import ClientInfo
-from google.cloud import storage
+# not sure why but mypy complains on missing `storage` but it is clearly there and is importable
+from google.cloud import storage  # type: ignore[attr-defined]
 
-from airflow import version
+from airflow.compat.functools import cached_property
 from airflow.providers.google.cloud.utils.credentials_provider import get_credentials_and_project_id
+from airflow.providers.google.common.consts import CLIENT_INFO
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import LoggingMixin
 
@@ -45,25 +44,18 @@ class GCSTaskHandler(FileTaskHandler, LoggingMixin):
     failure, it reads from host machine's local disk.
 
     :param base_log_folder: Base log folder to place logs.
-    :type base_log_folder: str
     :param gcs_log_folder: Path to a remote location where logs will be saved. It must have the prefix
         ``gs://``. For example: ``gs://bucket/remote/log/location``
-    :type gcs_log_folder: str
     :param filename_template: template filename string
-    :type filename_template: str
     :param gcp_key_path: Path to Google Cloud Service Account file (JSON). Mutually exclusive with
         gcp_keyfile_dict.
         If omitted, authorization based on `the Application Default Credentials
         <https://cloud.google.com/docs/authentication/production#finding_credentials_automatically>`__ will
         be used.
-    :type gcp_key_path: str
     :param gcp_keyfile_dict: Dictionary of keyfile parameters. Mutually exclusive with gcp_key_path.
-    :type gcp_keyfile_dict: dict
     :param gcp_scopes: Comma-separated string containing OAuth2 scopes
-    :type gcp_scopes: str
     :param project_id: Project ID to read the secrets from. If not passed, the project ID from credentials
         will be used.
-    :type project_id: str
     """
 
     def __init__(
@@ -71,15 +63,15 @@ class GCSTaskHandler(FileTaskHandler, LoggingMixin):
         *,
         base_log_folder: str,
         gcs_log_folder: str,
-        filename_template: str,
-        gcp_key_path: Optional[str] = None,
-        gcp_keyfile_dict: Optional[dict] = None,
-        gcp_scopes: Optional[Collection[str]] = _DEFAULT_SCOPESS,
-        project_id: Optional[str] = None,
+        filename_template: str | None = None,
+        gcp_key_path: str | None = None,
+        gcp_keyfile_dict: dict | None = None,
+        gcp_scopes: Collection[str] | None = _DEFAULT_SCOPESS,
+        project_id: str | None = None,
     ):
         super().__init__(base_log_folder, filename_template)
         self.remote_base = gcs_log_folder
-        self.log_relative_path = ''
+        self.log_relative_path = ""
         self._hook = None
         self.closed = False
         self.upload_on_close = True
@@ -99,7 +91,7 @@ class GCSTaskHandler(FileTaskHandler, LoggingMixin):
         )
         return storage.Client(
             credentials=credentials,
-            client_info=ClientInfo(client_library_version='airflow_v' + version.version),
+            client_info=CLIENT_INFO,
             project=self.project_id if self.project_id else project_id,
         )
 
@@ -155,12 +147,12 @@ class GCSTaskHandler(FileTaskHandler, LoggingMixin):
         try:
             blob = storage.Blob.from_string(remote_loc, self.client)
             remote_log = blob.download_as_bytes().decode()
-            log = f'*** Reading remote log from {remote_loc}.\n{remote_log}\n'
-            return log, {'end_of_log': True}
+            log = f"*** Reading remote log from {remote_loc}.\n{remote_log}\n"
+            return log, {"end_of_log": True}
         except Exception as e:
-            log = f'*** Unable to read remote log from {remote_loc}\n*** {str(e)}\n\n'
+            log = f"*** Unable to read remote log from {remote_loc}\n*** {str(e)}\n\n"
             self.log.error(log)
-            local_log, metadata = super()._read(ti, try_number)
+            local_log, metadata = super()._read(ti, try_number, metadata)
             log += local_log
             return log, metadata
 
@@ -170,21 +162,19 @@ class GCSTaskHandler(FileTaskHandler, LoggingMixin):
         was created.
 
         :param log: the log to write to the remote_log_location
-        :type log: str
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         """
         try:
             blob = storage.Blob.from_string(remote_log_location, self.client)
             old_log = blob.download_as_bytes().decode()
-            log = '\n'.join([old_log, log]) if old_log else log
+            log = "\n".join([old_log, log]) if old_log else log
         except Exception as e:
-            if not hasattr(e, 'resp') or e.resp.get('status') != '404':
-                log = f'*** Previous log discarded: {str(e)}\n\n' + log
+            if not hasattr(e, "resp") or e.resp.get("status") != "404":
+                log = f"*** Previous log discarded: {str(e)}\n\n" + log
                 self.log.info("Previous log discarded: %s", e)
 
         try:
             blob = storage.Blob.from_string(remote_log_location, self.client)
             blob.upload_from_string(log, content_type="text/plain")
         except Exception as e:
-            self.log.error('Could not write logs to %s: %s', remote_log_location, e)
+            self.log.error("Could not write logs to %s: %s", remote_log_location, e)

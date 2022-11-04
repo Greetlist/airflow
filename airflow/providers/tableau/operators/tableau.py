@@ -14,7 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
@@ -24,16 +26,20 @@ from airflow.providers.tableau.hooks.tableau import (
     TableauJobFinishCode,
 )
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
+
 RESOURCES_METHODS = {
-    'datasources': ['delete', 'refresh'],
-    'groups': ['delete'],
-    'projects': ['delete'],
-    'schedule': ['delete'],
-    'sites': ['delete'],
-    'subscriptions': ['delete'],
-    'tasks': ['delete', 'run'],
-    'users': ['remove'],
-    'workbooks': ['delete', 'refresh'],
+    "datasources": ["delete", "refresh"],
+    "groups": ["delete"],
+    "projects": ["delete"],
+    "schedule": ["delete"],
+    "sites": ["delete"],
+    "subscriptions": ["delete"],
+    "tasks": ["delete", "run"],
+    "users": ["remove"],
+    "workbooks": ["delete", "refresh"],
 }
 
 
@@ -47,23 +53,15 @@ class TableauOperator(BaseOperator):
         :ref:`howto/operator:TableauOperator`
 
     :param resource: The name of the resource to use.
-    :type resource: str
     :param method: The name of the resource's method to execute.
-    :type method: str
     :param find: The reference of resource that will receive the action.
-    :type find: str
     :param match_with: The resource field name to be matched with find parameter.
-    :type match_with: Optional[str]
     :param site_id: The id of the site where the workbook belongs to.
-    :type site_id: Optional[str]
     :param blocking_refresh: By default will be blocking means it will wait until it has finished.
-    :type blocking_refresh: bool
     :param check_interval: time in seconds that the job should wait in
         between each instance state checks until operation is completed
-    :type check_interval: float
     :param tableau_conn_id: The :ref:`Tableau Connection id <howto/connection:tableau>`
         containing the credentials to authenticate to the Tableau Server.
-    :type tableau_conn_id: str
     """
 
     def __init__(
@@ -72,11 +70,11 @@ class TableauOperator(BaseOperator):
         resource: str,
         method: str,
         find: str,
-        match_with: str = 'id',
-        site_id: Optional[str] = None,
+        match_with: str = "id",
+        site_id: str | None = None,
         blocking_refresh: bool = True,
         check_interval: float = 20,
-        tableau_conn_id: str = 'tableau_default',
+        tableau_conn_id: str = "tableau_default",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -89,22 +87,20 @@ class TableauOperator(BaseOperator):
         self.blocking_refresh = blocking_refresh
         self.tableau_conn_id = tableau_conn_id
 
-    def execute(self, context: dict) -> str:
+    def execute(self, context: Context) -> str:
         """
         Executes the Tableau API resource and pushes the job id or downloaded file URI to xcom.
         :param context: The task context during execution.
-        :type context: dict
         :return: the id of the job that executes the extract refresh or downloaded file URI.
-        :rtype: str
         """
         available_resources = RESOURCES_METHODS.keys()
         if self.resource not in available_resources:
-            error_message = f'Resource not found! Available Resources: {available_resources}'
+            error_message = f"Resource not found! Available Resources: {available_resources}"
             raise AirflowException(error_message)
 
         available_methods = RESOURCES_METHODS[self.resource]
         if self.method not in available_methods:
-            error_message = f'Method not found! Available methods for {self.resource}: {available_methods}'
+            error_message = f"Method not found! Available methods for {self.resource}: {available_methods}"
             raise AirflowException(error_message)
 
         with TableauHook(self.site_id, self.tableau_conn_id) as tableau_hook:
@@ -116,29 +112,28 @@ class TableauOperator(BaseOperator):
 
             response = method(resource_id)
 
-        if self.method == 'refresh':
-
             job_id = response.id
 
-            if self.blocking_refresh:
-                if not tableau_hook.wait_for_state(
-                    job_id=job_id,
-                    check_interval=self.check_interval,
-                    target_state=TableauJobFinishCode.SUCCESS,
-                ):
-                    raise TableauJobFailedException(f'The Tableau Refresh {self.resource} Job failed!')
+            if self.method == "refresh":
+                if self.blocking_refresh:
+                    if not tableau_hook.wait_for_state(
+                        job_id=job_id,
+                        check_interval=self.check_interval,
+                        target_state=TableauJobFinishCode.SUCCESS,
+                    ):
+                        raise TableauJobFailedException(f"The Tableau Refresh {self.resource} Job failed!")
 
-            return job_id
+        return job_id
 
     def _get_resource_id(self, tableau_hook: TableauHook) -> str:
 
-        if self.match_with == 'id':
+        if self.match_with == "id":
             return self.find
 
         for resource in tableau_hook.get_all(resource_name=self.resource):
             if getattr(resource, self.match_with) == self.find:
                 resource_id = resource.id
-                self.log.info('Found matching with id %s', resource_id)
+                self.log.info("Found matching with id %s", resource_id)
                 return resource_id
 
-        raise AirflowException(f'{self.resource} with {self.match_with} {self.find} not found!')
+        raise AirflowException(f"{self.resource} with {self.match_with} {self.find} not found!")

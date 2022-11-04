@@ -15,19 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Plugin to demonstrate timetable registration and accommodate example DAGs."""
+from __future__ import annotations
 
 # [START howto_timetable]
 from datetime import timedelta
-from typing import Optional
 
-from pendulum import Date, DateTime, Time, timezone
+from pendulum import UTC, Date, DateTime, Time
 
 from airflow.plugins_manager import AirflowPlugin
 from airflow.timetables.base import DagRunInfo, DataInterval, TimeRestriction, Timetable
-
-UTC = timezone("UTC")
 
 
 class AfterWorkdayTimetable(Timetable):
@@ -49,9 +46,9 @@ class AfterWorkdayTimetable(Timetable):
     def next_dagrun_info(
         self,
         *,
-        last_automated_data_interval: Optional[DataInterval],
+        last_automated_data_interval: DataInterval | None,
         restriction: TimeRestriction,
-    ) -> Optional[DagRunInfo]:
+    ) -> DagRunInfo | None:
         if last_automated_data_interval is not None:  # There was a previous run on the regular schedule.
             last_start = last_automated_data_interval.start
             last_start_weekday = last_start.weekday()

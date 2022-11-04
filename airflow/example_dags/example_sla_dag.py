@@ -14,13 +14,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""Example DAG demonstrating SLA use in Tasks"""
+from __future__ import annotations
 
+import datetime
 import time
-from datetime import datetime, timedelta
+
+import pendulum
 
 from airflow.decorators import dag, task
-
-"""Example DAG demonstrating SLA use in Tasks"""
 
 
 # [START howto_task_sla]
@@ -38,14 +40,14 @@ def sla_callback(dag, task_list, blocking_task_list, slas, blocking_tis):
 
 
 @dag(
-    schedule_interval="*/2 * * * *",
-    start_date=datetime(2021, 1, 1),
+    schedule="*/2 * * * *",
+    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     sla_miss_callback=sla_callback,
     default_args={'email': "email@example.com"},
 )
 def example_sla_dag():
-    @task(sla=timedelta(seconds=10))
+    @task(sla=datetime.timedelta(seconds=10))
     def sleep_20():
         """Sleep for 20 seconds"""
         time.sleep(20)
@@ -58,6 +60,6 @@ def example_sla_dag():
     sleep_20() >> sleep_30()
 
 
-dag = example_sla_dag()
+example_dag = example_sla_dag()
 
 # [END howto_task_sla]

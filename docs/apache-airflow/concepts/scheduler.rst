@@ -44,57 +44,37 @@ Your DAGs will start executing once the scheduler is running successfully.
 .. note::
 
     The first DAG Run is created based on the minimum ``start_date`` for the tasks in your DAG.
-    Subsequent DAG Runs are created by the scheduler process, based on your DAG’s ``schedule_interval``,
-    sequentially.
+    Subsequent DAG Runs are created according to your DAG's :doc:`timetable </concepts/timetable>`.
 
 
-The scheduler won't trigger your tasks until the period it covers has ended e.g., A job with ``schedule_interval`` set as ``@daily`` runs after the day
+For dags with a cron or timedelta schedule, scheduler won't trigger your tasks until the period it covers has ended e.g., A job with ``schedule`` set as ``@daily`` runs after the day
 has ended. This technique makes sure that whatever data is required for that period is fully available before the DAG is executed.
 In the UI, it appears as if Airflow is running your tasks a day **late**
 
 .. note::
 
-    If you run a DAG on a ``schedule_interval`` of one day, the run with data interval starting on ``2019-11-21`` triggers after ``2019-11-21T23:59``.
+    If you run a DAG on a ``schedule`` of one day, the run with data interval starting on ``2019-11-21`` triggers after ``2019-11-21T23:59``.
 
-    **Let’s Repeat That**, the scheduler runs your job one ``schedule_interval`` AFTER the start date, at the END of the interval.
+    **Let's Repeat That**, the scheduler runs your job one ``schedule`` AFTER the start date, at the END of the interval.
 
     You should refer to :doc:`/dag-run` for details on scheduling a DAG.
 
 DAG File Processing
 -------------------
 
-The Airflow Scheduler is responsible for turning the Python files contained in the DAGs folder into DAG objects that contain tasks to be scheduled.
+You can have the Airflow Scheduler be responsible for starting the process that turns the Python files contained in the DAGs folder into DAG objects
+that contain tasks to be scheduled.
 
-There are two primary components involved in DAG file processing.  The ``DagFileProcessorManager`` is a process executing an infinite loop that determines which files need
-to be processed, and the ``DagFileProcessorProcess`` is a separate process that is started to convert an individual file into one or more DAG objects.
-
-.. image:: /img/dag_file_processing_diagram.png
-
-``DagFileProcessorManager`` has the following steps:
-
-1. Check for new files:  If the elapsed time since the DAG was last refreshed is > :ref:`config:scheduler__dag_dir_list_interval` then update the file paths list
-2. Exclude recently processed files:  Exclude files that have been processed more recently than :ref:`min_file_process_interval<config:scheduler__min_file_process_interval>` and have not been modified
-3. Queue file paths: Add files discovered to the file path queue
-4. Process files:  Start a new ``DagFileProcessorProcess`` for each file, up to a maximum of :ref:`config:scheduler__parsing_processes`
-5. Collect results: Collect the result from any finished DAG processors
-6. Log statistics:  Print statistics and emit ``dag_processing.total_parse_time``
-
-``DagFileProcessorProcess`` has the following steps:
-
-1. Process file: The entire process must complete within :ref:`dag_file_processor_timeout<config:core__dag_file_processor_timeout>`
-2. Load modules from file: Uses Python imp command, must complete within :ref:`dagbag_import_timeout<config:core__dagbag_import_timeout>`
-3. Process modules:  Find DAG objects within Python module
-4. Return DagBag:  Provide the ``DagFileProcessorManager`` a list of the discovered DAG objects
-
+Refer to :doc:`dagfile-processing` for details on how this can be achieved
 
 
 Triggering DAG with Future Date
 -------------------------------
 
 If you want to use 'external trigger' to run future-dated data intervals, set ``allow_trigger_in_future = True`` in ``scheduler`` section in ``airflow.cfg``.
-This only has effect if your DAG has no ``schedule_interval``.
-If you keep default ``allow_trigger_in_future = False`` and try 'external trigger' to run future-dated data intervals,
-the scheduler won't execute it now but the scheduler will execute it in the future once the current date rolls over to the start of the data interval.
+This only has effect if your DAG is defined with ``schedule=None``.
+When set to ``False`` (the default value), if you manually trigger a run with future-dated data intervals,
+the scheduler will not execute it until its ``data_interval_start`` is in the past.
 
 .. _scheduler:ha:
 
@@ -130,7 +110,7 @@ This does however place some requirements on the Database.
 Database Requirements
 """""""""""""""""""""
 
-The short version is that users of PostgreSQL 9.6+ or MySQL 8+ are all ready to go -- you can start running as
+The short version is that users of PostgreSQL 10+ or MySQL 8+ are all ready to go -- you can start running as
 many copies of the scheduler as you like -- there is no further set up or config options needed. If you are
 using a different database please read on.
 
@@ -146,7 +126,7 @@ UPDATE NOWAIT`` but the exact query is slightly different).
 
 The following databases are fully supported and provide an "optimal" experience:
 
-- PostgreSQL 9.6+
+- PostgreSQL 10+
 - MySQL 8+
 
 .. warning::
@@ -269,7 +249,7 @@ There are several areas of resource usage that you should pay attention to:
   for MsSQL is still experimental.
 * CPU usage is most important for FileProcessors - those are the processes that parse and execute
   Python DAG files. Since Schedulers triggers such parsing continuously, when you have a lot of DAGs,
-  the processing might take a lot of CPU. You can mitigate it by decreasing the
+  the processing might take a lot of CPU. You can mitigate it by increasing the
   :ref:`config:scheduler__min_file_process_interval`, but this is one of the mentioned trade-offs,
   result of this is that changes to such files will be picked up slower and you will see delays between
   submitting the files and getting them available in Airflow UI and executed by Scheduler. Optimizing
@@ -353,9 +333,9 @@ However you can also look at other non-performance-related scheduler configurati
 
 - :ref:`config:scheduler__pool_metrics_interval`
 
-  How often (in seconds) should pool usage stats be sent to statsd (if
+  How often (in seconds) should pool usage stats be sent to StatsD (if
   statsd_on is enabled). This is a *relatively* expensive query to compute
-  this, so this should be set to match the same period as your statsd roll-up
+  this, so this should be set to match the same period as your StatsD roll-up
   period.
 
 - :ref:`config:scheduler__orphaned_tasks_check_interval`
@@ -401,6 +381,6 @@ However you can also look at other non-performance-related scheduler configurati
   renamed in the future with deprecation of the current name.
 
 - :ref:`config:scheduler__schedule_after_task_execution`
-  Should the Task supervisor process perform a “mini scheduler” to attempt to schedule more tasks of
+  Should the Task supervisor process perform a "mini scheduler" to attempt to schedule more tasks of
   the same DAG. Leaving this on will mean tasks in the same DAG execute quicker,
   but might starve out other DAGs in some circumstances.

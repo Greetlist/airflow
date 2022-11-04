@@ -15,10 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 from base64 import b64encode
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Sequence
 
 from winrm.exceptions import WinRMOperationTimeoutError
 
@@ -27,10 +28,14 @@ from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.microsoft.winrm.hooks.winrm import WinRMHook
 
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
+
 # Hide the following error message in urllib3 when making WinRM connections:
 # requests.packages.urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(),
 #   MultipartInvariantViolationDefect()], unparsed data: ''
-logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
 
 class WinRMOperator(BaseOperator):
@@ -38,34 +43,27 @@ class WinRMOperator(BaseOperator):
     WinRMOperator to execute commands on given remote host using the winrm_hook.
 
     :param winrm_hook: predefined ssh_hook to use for remote execution
-    :type winrm_hook: airflow.providers.microsoft.winrm.hooks.winrm.WinRMHook
     :param ssh_conn_id: connection id from airflow Connections
-    :type ssh_conn_id: str
     :param remote_host: remote host to connect
-    :type remote_host: str
     :param command: command to execute on remote host. (templated)
-    :type command: str
     :param ps_path: path to powershell, `powershell` for v5.1- and `pwsh` for v6+.
         If specified, it will execute the command as powershell script.
-    :type ps_path: str
     :param output_encoding: the encoding used to decode stout and stderr
-    :type output_encoding: str
     :param timeout: timeout for executing the command.
-    :type timeout: int
     """
 
-    template_fields = ('command',)
+    template_fields: Sequence[str] = ("command",)
     template_fields_renderers = {"command": "powershell"}
 
     def __init__(
         self,
         *,
-        winrm_hook: Optional[WinRMHook] = None,
-        ssh_conn_id: Optional[str] = None,
-        remote_host: Optional[str] = None,
-        command: Optional[str] = None,
-        ps_path: Optional[str] = None,
-        output_encoding: str = 'utf-8',
+        winrm_hook: WinRMHook | None = None,
+        ssh_conn_id: str | None = None,
+        remote_host: str | None = None,
+        command: str | None = None,
+        ps_path: str | None = None,
+        output_encoding: str = "utf-8",
         timeout: int = 10,
         **kwargs,
     ) -> None:
@@ -78,7 +76,7 @@ class WinRMOperator(BaseOperator):
         self.output_encoding = output_encoding
         self.timeout = timeout
 
-    def execute(self, context: dict) -> Union[list, str]:
+    def execute(self, context: Context) -> list | str:
         if self.ssh_conn_id and not self.winrm_hook:
             self.log.info("Hook not found, creating...")
             self.winrm_hook = WinRMHook(ssh_conn_id=self.ssh_conn_id)
@@ -97,9 +95,9 @@ class WinRMOperator(BaseOperator):
         try:
             if self.ps_path is not None:
                 self.log.info("Running command as powershell script: '%s'...", self.command)
-                encoded_ps = b64encode(self.command.encode('utf_16_le')).decode('ascii')
+                encoded_ps = b64encode(self.command.encode("utf_16_le")).decode("ascii")
                 command_id = self.winrm_hook.winrm_protocol.run_command(  # type: ignore[attr-defined]
-                    winrm_client, f'{self.ps_path} -encodedcommand {encoded_ps}'
+                    winrm_client, f"{self.ps_path} -encodedcommand {encoded_ps}"
                 )
             else:
                 self.log.info("Running command: '%s'...", self.command)
@@ -147,13 +145,13 @@ class WinRMOperator(BaseOperator):
 
         if return_code == 0:
             # returning output if do_xcom_push is set
-            enable_pickling = conf.getboolean('core', 'enable_xcom_pickling')
+            enable_pickling = conf.getboolean("core", "enable_xcom_pickling")
             if enable_pickling:
                 return stdout_buffer
             else:
-                return b64encode(b''.join(stdout_buffer)).decode(self.output_encoding)
+                return b64encode(b"".join(stdout_buffer)).decode(self.output_encoding)
         else:
-            stderr_output = b''.join(stderr_buffer).decode(self.output_encoding)
+            stderr_output = b"".join(stderr_buffer).decode(self.output_encoding)
             error_msg = (
                 f"Error running cmd: {self.command}, return code: {return_code}, error: {stderr_output}"
             )

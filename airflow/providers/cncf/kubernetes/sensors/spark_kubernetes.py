@@ -15,13 +15,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Dict, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from kubernetes import client
 
 from airflow.exceptions import AirflowException
 from airflow.providers.cncf.kubernetes.hooks.kubernetes import KubernetesHook
 from airflow.sensors.base import BaseSensorOperator
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class SparkKubernetesSensor(BaseSensorOperator):
@@ -33,21 +38,16 @@ class SparkKubernetesSensor(BaseSensorOperator):
         https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/v1beta2-1.1.0-2.4.5/docs/api-docs.md#sparkapplication
 
     :param application_name: spark Application resource name
-    :type application_name:  str
     :param namespace: the kubernetes namespace where the sparkApplication reside in
-    :type namespace: str
+    :param container_name: the kubernetes container name where the sparkApplication reside in
     :param kubernetes_conn_id: The :ref:`kubernetes connection<howto/connection:kubernetes>`
         to Kubernetes cluster.
-    :type kubernetes_conn_id: str
     :param attach_log: determines whether logs for driver pod should be appended to the sensor log
-    :type attach_log: bool
     :param api_group: kubernetes api group of sparkApplication
-    :type api_group: str
     :param api_version: kubernetes api version of sparkApplication
-    :type api_version: str
     """
 
-    template_fields = ("application_name", "namespace")
+    template_fields: Sequence[str] = ("application_name", "namespace")
     FAILURE_STATES = ("FAILED", "UNKNOWN")
     SUCCESS_STATES = ("COMPLETED",)
 
@@ -56,16 +56,18 @@ class SparkKubernetesSensor(BaseSensorOperator):
         *,
         application_name: str,
         attach_log: bool = False,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
+        container_name: str = "spark-kubernetes-driver",
         kubernetes_conn_id: str = "kubernetes_default",
-        api_group: str = 'sparkoperator.k8s.io',
-        api_version: str = 'v1beta2',
+        api_group: str = "sparkoperator.k8s.io",
+        api_version: str = "v1beta2",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.application_name = application_name
         self.attach_log = attach_log
         self.namespace = namespace
+        self.container_name = container_name
         self.kubernetes_conn_id = kubernetes_conn_id
         self.hook = KubernetesHook(conn_id=self.kubernetes_conn_id)
         self.api_group = api_group
@@ -85,7 +87,9 @@ class SparkKubernetesSensor(BaseSensorOperator):
         log_method = self.log.error if application_state in self.FAILURE_STATES else self.log.info
         try:
             log = ""
-            for line in self.hook.get_pod_logs(driver_pod_name, namespace=namespace):
+            for line in self.hook.get_pod_logs(
+                driver_pod_name, namespace=namespace, container=self.container_name
+            ):
                 log += line.decode()
             log_method(log)
         except client.rest.ApiException as e:
@@ -97,7 +101,7 @@ class SparkKubernetesSensor(BaseSensorOperator):
                 e,
             )
 
-    def poke(self, context: Dict) -> bool:
+    def poke(self, context: Context) -> bool:
         self.log.info("Poking: %s", self.application_name)
         response = self.hook.get_custom_object(
             group=self.api_group,

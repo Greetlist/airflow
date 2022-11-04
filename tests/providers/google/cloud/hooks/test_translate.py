@@ -15,67 +15,63 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import unittest
 from unittest import mock
 
 from airflow.providers.google.cloud.hooks.translate import CloudTranslateHook
+from airflow.providers.google.common.consts import CLIENT_INFO
 from tests.providers.google.cloud.utils.base_gcp_mock import mock_base_gcp_hook_default_project_id
 
-PROJECT_ID_TEST = 'project-id'
+PROJECT_ID_TEST = "project-id"
 
 
 class TestCloudTranslateHook(unittest.TestCase):
     def setUp(self):
         with mock.patch(
-            'airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.__init__',
+            "airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.__init__",
             new=mock_base_gcp_hook_default_project_id,
         ):
-            self.hook = CloudTranslateHook(gcp_conn_id='test')
+            self.hook = CloudTranslateHook(gcp_conn_id="test")
 
-    @mock.patch(
-        "airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.client_info",
-        new_callable=mock.PropertyMock,
-    )
-    @mock.patch("airflow.providers.google.cloud.hooks.translate.CloudTranslateHook._get_credentials")
+    @mock.patch("airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.get_credentials")
     @mock.patch("airflow.providers.google.cloud.hooks.translate.Client")
-    def test_translate_client_creation(self, mock_client, mock_get_creds, mock_client_info):
+    def test_translate_client_creation(self, mock_client, mock_get_creds):
         result = self.hook.get_conn()
-        mock_client.assert_called_once_with(
-            credentials=mock_get_creds.return_value, client_info=mock_client_info.return_value
-        )
+        mock_client.assert_called_once_with(credentials=mock_get_creds.return_value, client_info=CLIENT_INFO)
         assert mock_client.return_value == result
         assert self.hook._client == result
 
-    @mock.patch('airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.get_conn')
+    @mock.patch("airflow.providers.google.cloud.hooks.translate.CloudTranslateHook.get_conn")
     def test_translate_called(self, get_conn):
         # Given
         translate_method = get_conn.return_value.translate
         translate_method.return_value = {
-            'translatedText': 'Yellowing self Gęśle',
-            'detectedSourceLanguage': 'pl',
-            'model': 'base',
-            'input': 'zażółć gęślą jaźń',
+            "translatedText": "Yellowing self Gęśle",
+            "detectedSourceLanguage": "pl",
+            "model": "base",
+            "input": "zażółć gęślą jaźń",
         }
         # When
         result = self.hook.translate(
-            values=['zażółć gęślą jaźń'],
-            target_language='en',
-            format_='text',
+            values=["zażółć gęślą jaźń"],
+            target_language="en",
+            format_="text",
             source_language=None,
-            model='base',
+            model="base",
         )
         # Then
         assert result == {
-            'translatedText': 'Yellowing self Gęśle',
-            'detectedSourceLanguage': 'pl',
-            'model': 'base',
-            'input': 'zażółć gęślą jaźń',
+            "translatedText": "Yellowing self Gęśle",
+            "detectedSourceLanguage": "pl",
+            "model": "base",
+            "input": "zażółć gęślą jaźń",
         }
         translate_method.assert_called_once_with(
-            values=['zażółć gęślą jaźń'],
-            target_language='en',
-            format_='text',
+            values=["zażółć gęślą jaźń"],
+            target_language="en",
+            format_="text",
             source_language=None,
-            model='base',
+            model="base",
         )

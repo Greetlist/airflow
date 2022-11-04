@@ -23,6 +23,7 @@
 import { escapeHtml } from './main';
 import { defaultFormat, formatDateTime } from './datetime_utils';
 import { dagTZ } from './dag';
+import { finalStatesMap } from './utils';
 
 function makeDateTimeHTML(start, end) {
   // check task ended or not
@@ -64,10 +65,24 @@ function generateTooltipDateTimes(startTime, endTime, dagTimezone) {
   return tooltipHTML;
 }
 
-export default function tiTooltip(ti, { includeTryNumber = false } = {}) {
+export default function tiTooltip(ti, task, { includeTryNumber = false } = {}) {
   let tt = '';
   if (ti.state !== undefined) {
     tt += `<strong>Status:</strong> ${escapeHtml(ti.state)}<br><br>`;
+  }
+  if (ti.mapped_states) {
+    const numMap = finalStatesMap();
+    ti.mapped_states.forEach((s) => {
+      const stateKey = s || 'no_status';
+      if (numMap.has(stateKey)) numMap.set(stateKey, numMap.get(stateKey) + 1);
+    });
+    tt += `<strong>${escapeHtml(ti.mapped_states.length)} ${ti.mapped_states.length === 1 ? 'Task' : 'Tasks'} Mapped</strong><br />`;
+    numMap.forEach((key, val) => {
+      if (key > 0) {
+        tt += `<span style="margin-left: 15px">${escapeHtml(val)}: ${escapeHtml(key)}</span><br />`;
+      }
+    });
+    tt += '<br />';
   }
   if (ti.task_id !== undefined) {
     tt += `Task_id: ${escapeHtml(ti.task_id)}<br>`;
@@ -76,10 +91,16 @@ export default function tiTooltip(ti, { includeTryNumber = false } = {}) {
   if (ti.run_id !== undefined) {
     tt += `Run Id: <nobr>${escapeHtml(ti.run_id)}</nobr><br>`;
   }
+  // Show mapped index for specific child instance, but not for a summary instance
+  if (ti.map_index >= 0 && !ti.mapped_states) {
+    tt += `Map Index: ${escapeHtml(ti.map_index)}<br>`;
+  }
   if (ti.operator !== undefined) {
     tt += `Operator: ${escapeHtml(ti.operator)}<br>`;
   }
-
+  if (task && task.trigger_rule) {
+    tt += `Trigger Rule: ${task.trigger_rule}<br>`;
+  }
   // Calculate duration on the fly if task instance is still running
   if (ti.state === 'running') {
     const startDate = ti.start_date instanceof moment ? ti.start_date : moment(ti.start_date);

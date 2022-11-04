@@ -17,6 +17,7 @@
 
 .. image:: /img/helm-logo.svg
     :width: 100
+    :class: no-scaled-link
 
 Helm Chart for Apache Airflow
 =============================
@@ -33,6 +34,7 @@ Helm Chart for Apache Airflow
     setting-resources-for-containers
     keda
     using-additional-containers
+    customizing-workers
     Installing from sources<installing-helm-chart-from-sources>
 
 .. toctree::
@@ -46,8 +48,7 @@ Helm Chart for Apache Airflow
     :caption: References
 
     Parameters <parameters-ref>
-    changelog
-    Updating <updating>
+    release_notes
 
 
 This chart will bootstrap an `Airflow <https://airflow.apache.org>`__
@@ -64,7 +65,7 @@ Requirements
 Features
 --------
 
-* Supported executors: ``LocalExecutor``, ``CeleryExecutor``, ``CeleryKubernetesExecutor``, ``KubernetesExecutor``.
+* Supported executors: ``LocalExecutor``, ``CeleryExecutor``, ``KubernetesExecutor``, ``LocalKubernetesExecutor``, ``CeleryKubernetesExecutor``
 * Supported Airflow version: ``1.10+``, ``2.0+``
 * Supported database backend: ``PostgresSQL``, ``MySQL``
 * Autoscaling for ``CeleryExecutor`` provided by KEDA
@@ -82,13 +83,12 @@ Features
 Installing the Chart
 --------------------
 
-To install this chart using helm 3, run the following commands:
+To install this chart using Helm 3, run the following commands:
 
 .. code-block:: bash
 
-    kubectl create namespace airflow
     helm repo add apache-airflow https://airflow.apache.org
-    helm install airflow apache-airflow/airflow --namespace airflow
+    helm upgrade --install airflow apache-airflow/airflow --namespace airflow --create-namespace
 
 The command deploys Airflow on the Kubernetes cluster in the default configuration. The :doc:`parameters-ref`
 section lists the parameters that can be configured during installation.
@@ -119,13 +119,20 @@ To uninstall/delete the ``airflow`` deployment:
 
 The command removes all the Kubernetes components associated with the chart and deletes the release.
 
-Installing the Chart with ArgoCD
---------------------------------
+.. note::
+  Some kubernetes resources created by the chart `helm hooks <https://helm.sh/docs/topics/charts_hooks/#hook-resources-are-not-managed-with-corresponding-releases>`__ might be left in the namespace after executing ``helm uninstall``, for example, ``brokerUrlSecret`` or ``fernetKeySecret``.
 
-When installing the chart using ArgoCD, you MUST set the two following values, or your application
+Installing the Chart with Argo CD, Flux or Terraform
+-----------------------------------------------------
+
+When installing the chart using Argo CD, Flux, or Terraform, you MUST set the two following values, or your application
 will not start as the migrations will not be run:
 
 .. code-block:: yaml
 
-   createUserJob.useHelmHooks: false
-   migrateDatabaseJob.useHelmHooks: false
+    createUserJob:
+      useHelmHooks: false
+    migrateDatabaseJob:
+      useHelmHooks: false
+
+This also applies if you install the chart using ``--wait`` in your ``helm install`` command.

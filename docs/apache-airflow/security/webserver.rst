@@ -31,6 +31,17 @@ set the below:
     [webserver]
     x_frame_enabled = False
 
+Disable Deployment Exposure Warning
+---------------------------------------
+
+Airflow warns when recent requests are made to ``/robot.txt``. To disable this warning set ``warn_deployment_exposure`` to
+``False`` as below:
+
+.. code-block:: ini
+
+    [webserver]
+    warn_deployment_exposure = False
+
 Sensitive Variable fields
 -------------------------
 
@@ -85,18 +96,11 @@ Please use command line interface ``airflow users create`` to create accounts, o
 Other Methods
 '''''''''''''
 
-Since the Airflow 2.0, the default UI is the Flask App Builder RBAC. A ``webserver_config.py`` configuration file
+Since Airflow 2.0, the default UI is the Flask App Builder RBAC. A ``webserver_config.py`` configuration file
 is automatically generated and can be used to configure the Airflow to support authentication
 methods like OAuth, OpenID, LDAP, REMOTE_USER.
 
-For previous versions from Airflow, the ``$AIRFLOW_HOME/airflow.cfg`` following entry needs to be set to enable
-the Flask App Builder RBAC UI.
-
-.. code-block:: ini
-
-    rbac = True
-
-The default authentication option described in the :ref:`Web Authentication <web-authentication>` section it's related
+The default authentication option described in the :ref:`Web Authentication <web-authentication>` section is related
 with the following entry in the ``$AIRFLOW_HOME/webserver_config.py``.
 
 .. code-block:: ini
@@ -129,9 +133,9 @@ the comments removed and configured in the ``$AIRFLOW_HOME/webserver_config.py``
 For more details, please refer to
 `Security section of FAB documentation <https://flask-appbuilder.readthedocs.io/en/latest/security.html>`_.
 
-Example using team based Authorization with Github OAuth
+Example using team based Authorization with GitHub OAuth
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-There are a few steps required in order to use team-based authorization with Github OAuth.
+There are a few steps required in order to use team-based authorization with GitHub OAuth.
 
 * configure OAuth through the FAB config in webserver_config.py
 * create a custom security manager class and supply it to FAB in webserver_config.py
@@ -146,9 +150,7 @@ Here is an example of what you might have in your webserver_config.py:
 
     AUTH_TYPE = AUTH_OAUTH
     AUTH_ROLES_SYNC_AT_LOGIN = True  # Checks roles on every login
-    AUTH_USER_REGISTRATION = (
-        True  # allow users who are not already in the FAB DB to register
-    )
+    AUTH_USER_REGISTRATION = True  # allow users who are not already in the FAB DB to register
     # Make sure to replace this with the path to your security manager class
     FAB_SECURITY_MANAGER_CLASS = "your_module.your_security_manager_class"
     AUTH_ROLES_MAPPING = {
@@ -181,7 +183,7 @@ webserver_config.py itself if you wish.
 
     from airflow.www.security import AirflowSecurityManager
     import logging
-    from typing import Dict, Any, List, Union
+    from typing import Any, List, Union
     import os
 
     log = logging.getLogger(__name__)
@@ -194,12 +196,12 @@ webserver_config.py itself if you wish.
     TEAM_ID_B_FROM_GITHUB = 456  # Replace these with real team IDs for your org
 
 
-    def team_parser(team_payload: Dict[str, Any]) -> List[int]:
-        # Parse the team payload from Github however you want here.
+    def team_parser(team_payload: dict[str, Any]) -> list[int]:
+        # Parse the team payload from GitHub however you want here.
         return [team["id"] for team in team_payload]
 
 
-    def map_roles(team_list: List[int]) -> List[str]:
+    def map_roles(team_list: list[int]) -> list[str]:
         # Associate the team IDs with Roles here.
         # The expected output is a list of roles that FAB will use to Authorize the user.
 
@@ -215,9 +217,7 @@ webserver_config.py itself if you wish.
         # In this example, the oauth provider == 'github'.
         # If you ever want to support other providers, see how it is done here:
         # https://github.com/dpgaspar/Flask-AppBuilder/blob/master/flask_appbuilder/security/manager.py#L550
-        def get_oauth_user_info(
-            self, provider: str, resp: Any
-        ) -> Dict[str, Union[str, List[str]]]:
+        def get_oauth_user_info(self, provider: str, resp: Any) -> dict[str, Union[str, list[str]]]:
 
             # Creates the user info payload from Github.
             # The user previously allowed your app to act on their behalf,
@@ -230,9 +230,7 @@ webserver_config.py itself if you wish.
             team_data = remote_app.get("user/teams")
             teams = team_parser(team_data.json())
             roles = map_roles(teams)
-            log.debug(
-                f"User info from Github: {user_data}\n" f"Team info from Github: {teams}"
-            )
+            log.debug(f"User info from Github: {user_data}\nTeam info from Github: {teams}")
             return {"username": "github_" + user_data.get("login"), "role_keys": roles}
 
 

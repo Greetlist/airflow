@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 """Providers sub-commands"""
+from __future__ import annotations
+
 import re
 
 from airflow.cli.simple_table import AirflowConsole
@@ -34,7 +36,7 @@ def provider_get(args):
     providers = ProvidersManager().providers
     if args.provider_name in providers:
         provider_version = providers[args.provider_name].version
-        provider_info = providers[args.provider_name].provider_info
+        provider_info = providers[args.provider_name].data
         if args.full:
             provider_info["description"] = _remove_rst_syntax(provider_info["description"])
             AirflowConsole().print_as(
@@ -55,9 +57,9 @@ def providers_list(args):
         data=list(ProvidersManager().providers.values()),
         output=args.output,
         mapper=lambda x: {
-            "package_name": x[1]["package-name"],
-            "description": _remove_rst_syntax(x[1]["description"]),
-            "version": x[0],
+            "package_name": x.data["package-name"],
+            "description": _remove_rst_syntax(x.data["description"]),
+            "version": x.version,
         },
     )
 
@@ -82,7 +84,7 @@ def hooks_list(args):
 def connection_form_widget_list(args):
     """Lists all custom connection form fields at the command line"""
     AirflowConsole().print_as(
-        data=list(ProvidersManager().connection_form_widgets.items()),
+        data=list(sorted(ProvidersManager().connection_form_widgets.items())),
         output=args.output,
         mapper=lambda x: {
             "connection_parameter_name": x[0],

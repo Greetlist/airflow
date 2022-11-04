@@ -15,9 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-import unittest
-from typing import Dict, List
 from unittest import mock
 
 import google.api_core.exceptions
@@ -25,7 +24,6 @@ import pytest
 from google.cloud.bigtable.column_family import MaxVersionsGCRule
 from google.cloud.bigtable.instance import Instance
 from google.cloud.bigtable_admin_v2 import enums
-from parameterized import parameterized
 
 from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.operators.bigtable import (
@@ -37,38 +35,44 @@ from airflow.providers.google.cloud.operators.bigtable import (
     BigtableUpdateInstanceOperator,
 )
 
-PROJECT_ID = 'test_project_id'
-INSTANCE_ID = 'test-instance-id'
-CLUSTER_ID = 'test-cluster-id'
-CLUSTER_ZONE = 'us-central1-f'
+PROJECT_ID = "test_project_id"
+INSTANCE_ID = "test-instance-id"
+CLUSTER_ID = "test-cluster-id"
+CLUSTER_ZONE = "us-central1-f"
 REPLICATE_CLUSTERS = [
-    {'id': 'replica-1', 'zone': 'us-west1-a'},
-    {'id': 'replica-2', 'zone': 'us-central1-f'},
-    {'id': 'replica-3', 'zone': 'us-east1-d'},
+    {"id": "replica-1", "zone": "us-west1-a"},
+    {"id": "replica-2", "zone": "us-central1-f"},
+    {"id": "replica-3", "zone": "us-east1-d"},
 ]
-GCP_CONN_ID = 'test-gcp-conn-id'
+GCP_CONN_ID = "test-gcp-conn-id"
 IMPERSONATION_CHAIN = ["ACCOUNT_1", "ACCOUNT_2", "ACCOUNT_3"]
 NODES = 5
 INSTANCE_DISPLAY_NAME = "test instance"
 INSTANCE_TYPE = enums.Instance.Type.PRODUCTION
 INSTANCE_LABELS = {"env": "sit"}
-TABLE_ID = 'test-table-id'
-INITIAL_SPLIT_KEYS = []  # type: List
-EMPTY_COLUMN_FAMILIES = {}  # type: Dict
+TABLE_ID = "test-table-id"
+INITIAL_SPLIT_KEYS: list = []
+EMPTY_COLUMN_FAMILIES: dict = {}
 
 
-class TestBigtableInstanceCreate(unittest.TestCase):
-    @parameterized.expand(
+class TestBigtableInstanceCreate:
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id, main_cluster_id, main_cluster_zone",
         [
-            ('instance_id', PROJECT_ID, '', CLUSTER_ID, CLUSTER_ZONE),
-            ('main_cluster_id', PROJECT_ID, INSTANCE_ID, '', CLUSTER_ZONE),
-            ('main_cluster_zone', PROJECT_ID, INSTANCE_ID, CLUSTER_ID, ''),
+            ("instance_id", PROJECT_ID, "", CLUSTER_ID, CLUSTER_ZONE),
+            ("main_cluster_id", PROJECT_ID, INSTANCE_ID, "", CLUSTER_ZONE),
+            ("main_cluster_zone", PROJECT_ID, INSTANCE_ID, CLUSTER_ID, ""),
         ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_empty_attribute(
-        self, missing_attribute, project_id, instance_id, main_cluster_id, main_cluster_zone, mock_hook
+        self,
+        mock_hook,
+        missing_attribute,
+        project_id,
+        instance_id,
+        main_cluster_id,
+        main_cluster_zone,
     ):
         with pytest.raises(AirflowException) as ctx:
             BigtableCreateInstanceOperator(
@@ -80,10 +84,10 @@ class TestBigtableInstanceCreate(unittest.TestCase):
                 gcp_conn_id=GCP_CONN_ID,
             )
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_create_instance_that_exists(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
 
@@ -96,7 +100,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
 
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
@@ -104,7 +108,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
         )
         mock_hook.return_value.create_instance.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_create_instance_that_exists_empty_project_id(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
 
@@ -116,7 +120,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
 
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
@@ -124,7 +128,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
         )
         mock_hook.return_value.create_instance.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_different_error_reraised(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
         op = BigtableCreateInstanceOperator(
@@ -138,7 +142,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
         )
 
         mock_hook.return_value.create_instance.side_effect = mock.Mock(
-            side_effect=google.api_core.exceptions.GoogleAPICallError('error')
+            side_effect=google.api_core.exceptions.GoogleAPICallError("error")
         )
 
         with pytest.raises(google.api_core.exceptions.GoogleAPICallError):
@@ -159,12 +163,10 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             main_cluster_zone=CLUSTER_ZONE,
             project_id=PROJECT_ID,
             replica_clusters=None,
-            replica_cluster_id=None,
-            replica_cluster_zone=None,
             timeout=None,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_create_instance_that_doesnt_exists(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
         op = BigtableCreateInstanceOperator(
@@ -176,7 +178,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
@@ -192,12 +194,10 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             main_cluster_zone=CLUSTER_ZONE,
             project_id=PROJECT_ID,
             replica_clusters=None,
-            replica_cluster_id=None,
-            replica_cluster_zone=None,
             timeout=None,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_create_instance_with_replicas_that_doesnt_exists(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
         op = BigtableCreateInstanceOperator(
@@ -210,7 +210,7 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
@@ -226,14 +226,12 @@ class TestBigtableInstanceCreate(unittest.TestCase):
             main_cluster_zone=CLUSTER_ZONE,
             project_id=PROJECT_ID,
             replica_clusters=REPLICATE_CLUSTERS,
-            replica_cluster_id=None,
-            replica_cluster_zone=None,
             timeout=None,
         )
 
 
-class TestBigtableInstanceUpdate(unittest.TestCase):
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+class TestBigtableInstanceUpdate:
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_delete_execute(self, mock_hook):
         op = BigtableUpdateInstanceOperator(
             project_id=PROJECT_ID,
@@ -245,7 +243,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
@@ -259,7 +257,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
             timeout=None,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_update_execute_empty_project_id(self, mock_hook):
         op = BigtableUpdateInstanceOperator(
             instance_id=INSTANCE_ID,
@@ -270,7 +268,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
         )
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
@@ -284,14 +282,12 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
             timeout=None,
         )
 
-    @parameterized.expand(
-        [
-            ('instance_id', PROJECT_ID, ''),
-        ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id",
+        [("instance_id", PROJECT_ID, "")],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
-    def test_empty_attribute(self, missing_attribute, project_id, instance_id, mock_hook):
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
+    def test_empty_attribute(self, mock_hook, missing_attribute, project_id, instance_id):
         with pytest.raises(AirflowException) as ctx:
             BigtableUpdateInstanceOperator(
                 project_id=project_id,
@@ -302,10 +298,10 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
                 task_id="id",
             )
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_update_instance_that_doesnt_exists(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
 
@@ -331,7 +327,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
         )
         mock_hook.return_value.update_instance.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_update_instance_that_doesnt_exists_empty_project_id(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
 
@@ -356,7 +352,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
         )
         mock_hook.return_value.update_instance.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_different_error_reraised(self, mock_hook):
         op = BigtableUpdateInstanceOperator(
             project_id=PROJECT_ID,
@@ -369,7 +365,7 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
         mock_hook.return_value.update_instance.side_effect = mock.Mock(
-            side_effect=google.api_core.exceptions.GoogleAPICallError('error')
+            side_effect=google.api_core.exceptions.GoogleAPICallError("error")
         )
 
         with pytest.raises(google.api_core.exceptions.GoogleAPICallError):
@@ -389,17 +385,17 @@ class TestBigtableInstanceUpdate(unittest.TestCase):
         )
 
 
-class TestBigtableClusterUpdate(unittest.TestCase):
-    @parameterized.expand(
+class TestBigtableClusterUpdate:
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id, cluster_id, nodes",
         [
-            ('instance_id', PROJECT_ID, '', CLUSTER_ID, NODES),
-            ('cluster_id', PROJECT_ID, INSTANCE_ID, '', NODES),
-            ('nodes', PROJECT_ID, INSTANCE_ID, CLUSTER_ID, ''),
+            ("instance_id", PROJECT_ID, "", CLUSTER_ID, NODES),
+            ("cluster_id", PROJECT_ID, INSTANCE_ID, "", NODES),
+            ("nodes", PROJECT_ID, INSTANCE_ID, CLUSTER_ID, ""),
         ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
-    def test_empty_attribute(self, missing_attribute, project_id, instance_id, cluster_id, nodes, mock_hook):
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
+    def test_empty_attribute(self, mock_hook, missing_attribute, project_id, instance_id, cluster_id, nodes):
         with pytest.raises(AirflowException) as ctx:
             BigtableUpdateClusterOperator(
                 project_id=project_id,
@@ -410,10 +406,10 @@ class TestBigtableClusterUpdate(unittest.TestCase):
                 gcp_conn_id=GCP_CONN_ID,
             )
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_updating_cluster_but_instance_does_not_exists(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
 
@@ -437,7 +433,7 @@ class TestBigtableClusterUpdate(unittest.TestCase):
         )
         mock_hook.return_value.update_cluster.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_updating_cluster_but_instance_does_not_exists_empty_project_id(self, mock_hook):
         mock_hook.return_value.get_instance.return_value = None
 
@@ -460,7 +456,7 @@ class TestBigtableClusterUpdate(unittest.TestCase):
         )
         mock_hook.return_value.update_cluster.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_updating_cluster_that_does_not_exists(self, mock_hook):
         instance = mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
         mock_hook.return_value.update_cluster.side_effect = mock.Mock(
@@ -489,7 +485,7 @@ class TestBigtableClusterUpdate(unittest.TestCase):
             instance=instance, cluster_id=CLUSTER_ID, nodes=NODES
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_updating_cluster_that_does_not_exists_empty_project_id(self, mock_hook):
         instance = mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
         mock_hook.return_value.update_cluster.side_effect = mock.Mock(
@@ -517,7 +513,7 @@ class TestBigtableClusterUpdate(unittest.TestCase):
             instance=instance, cluster_id=CLUSTER_ID, nodes=NODES
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_different_error_reraised(self, mock_hook):
         op = BigtableUpdateClusterOperator(
             project_id=PROJECT_ID,
@@ -530,7 +526,7 @@ class TestBigtableClusterUpdate(unittest.TestCase):
         )
         instance = mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
         mock_hook.return_value.update_cluster.side_effect = mock.Mock(
-            side_effect=google.api_core.exceptions.GoogleAPICallError('error')
+            side_effect=google.api_core.exceptions.GoogleAPICallError("error")
         )
 
         with pytest.raises(google.api_core.exceptions.GoogleAPICallError):
@@ -545,8 +541,8 @@ class TestBigtableClusterUpdate(unittest.TestCase):
         )
 
 
-class TestBigtableInstanceDelete(unittest.TestCase):
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+class TestBigtableInstanceDelete:
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_delete_execute(self, mock_hook):
         op = BigtableDeleteInstanceOperator(
             project_id=PROJECT_ID,
@@ -564,7 +560,7 @@ class TestBigtableInstanceDelete(unittest.TestCase):
             project_id=PROJECT_ID, instance_id=INSTANCE_ID
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_delete_execute_empty_project_id(self, mock_hook):
         op = BigtableDeleteInstanceOperator(
             instance_id=INSTANCE_ID,
@@ -581,21 +577,19 @@ class TestBigtableInstanceDelete(unittest.TestCase):
             project_id=None, instance_id=INSTANCE_ID
         )
 
-    @parameterized.expand(
-        [
-            ('instance_id', PROJECT_ID, ''),
-        ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id",
+        [("instance_id", PROJECT_ID, "")],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
-    def test_empty_attribute(self, missing_attribute, project_id, instance_id, mock_hook):
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
+    def test_empty_attribute(self, mock_hook, missing_attribute, project_id, instance_id):
         with pytest.raises(AirflowException) as ctx:
             BigtableDeleteInstanceOperator(project_id=project_id, instance_id=instance_id, task_id="id")
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_deleting_instance_that_doesnt_exists(self, mock_hook):
         op = BigtableDeleteInstanceOperator(
             project_id=PROJECT_ID,
@@ -616,7 +610,7 @@ class TestBigtableInstanceDelete(unittest.TestCase):
             project_id=PROJECT_ID, instance_id=INSTANCE_ID
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_deleting_instance_that_doesnt_exists_empty_project_id(self, mock_hook):
         op = BigtableDeleteInstanceOperator(
             instance_id=INSTANCE_ID,
@@ -636,7 +630,7 @@ class TestBigtableInstanceDelete(unittest.TestCase):
             project_id=None, instance_id=INSTANCE_ID
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_different_error_reraised(self, mock_hook):
         op = BigtableDeleteInstanceOperator(
             project_id=PROJECT_ID,
@@ -646,7 +640,7 @@ class TestBigtableInstanceDelete(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
         mock_hook.return_value.delete_instance.side_effect = mock.Mock(
-            side_effect=google.api_core.exceptions.GoogleAPICallError('error')
+            side_effect=google.api_core.exceptions.GoogleAPICallError("error")
         )
 
         with pytest.raises(google.api_core.exceptions.GoogleAPICallError):
@@ -661,8 +655,8 @@ class TestBigtableInstanceDelete(unittest.TestCase):
         )
 
 
-class TestBigtableTableDelete(unittest.TestCase):
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+class TestBigtableTableDelete:
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_delete_execute(self, mock_hook):
         op = BigtableDeleteTableOperator(
             project_id=PROJECT_ID,
@@ -681,15 +675,15 @@ class TestBigtableTableDelete(unittest.TestCase):
             project_id=PROJECT_ID, instance_id=INSTANCE_ID, table_id=TABLE_ID
         )
 
-    @parameterized.expand(
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id, table_id",
         [
-            ('instance_id', PROJECT_ID, '', TABLE_ID),
-            ('table_id', PROJECT_ID, INSTANCE_ID, ''),
+            ("instance_id", PROJECT_ID, "", TABLE_ID),
+            ("table_id", PROJECT_ID, INSTANCE_ID, ""),
         ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
-    def test_empty_attribute(self, missing_attribute, project_id, instance_id, table_id, mock_hook):
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
+    def test_empty_attribute(self, mock_hook, missing_attribute, project_id, instance_id, table_id):
         with pytest.raises(AirflowException) as ctx:
             BigtableDeleteTableOperator(
                 project_id=project_id,
@@ -699,10 +693,10 @@ class TestBigtableTableDelete(unittest.TestCase):
                 gcp_conn_id=GCP_CONN_ID,
             )
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_deleting_table_that_doesnt_exists(self, mock_hook):
         op = BigtableDeleteTableOperator(
             project_id=PROJECT_ID,
@@ -725,7 +719,7 @@ class TestBigtableTableDelete(unittest.TestCase):
             project_id=PROJECT_ID, instance_id=INSTANCE_ID, table_id=TABLE_ID
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_deleting_table_that_doesnt_exists_empty_project_id(self, mock_hook):
         op = BigtableDeleteTableOperator(
             instance_id=INSTANCE_ID,
@@ -747,7 +741,7 @@ class TestBigtableTableDelete(unittest.TestCase):
             project_id=None, instance_id=INSTANCE_ID, table_id=TABLE_ID
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_deleting_table_when_instance_doesnt_exists(self, mock_hook):
         op = BigtableDeleteTableOperator(
             project_id=PROJECT_ID,
@@ -769,7 +763,7 @@ class TestBigtableTableDelete(unittest.TestCase):
         )
         mock_hook.return_value.delete_table.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_different_error_reraised(self, mock_hook):
         op = BigtableDeleteTableOperator(
             project_id=PROJECT_ID,
@@ -780,7 +774,7 @@ class TestBigtableTableDelete(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
         mock_hook.return_value.delete_table.side_effect = mock.Mock(
-            side_effect=google.api_core.exceptions.GoogleAPICallError('error')
+            side_effect=google.api_core.exceptions.GoogleAPICallError("error")
         )
 
         with pytest.raises(google.api_core.exceptions.GoogleAPICallError):
@@ -795,8 +789,8 @@ class TestBigtableTableDelete(unittest.TestCase):
         )
 
 
-class TestBigtableTableCreate(unittest.TestCase):
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+class TestBigtableTableCreate:
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_create_execute(self, mock_hook):
         op = BigtableCreateTableOperator(
             project_id=PROJECT_ID,
@@ -809,7 +803,7 @@ class TestBigtableTableCreate(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
         instance = mock_hook.return_value.get_instance.return_value = mock.Mock(Instance)
-        op.execute(None)
+        op.execute(context={"ti": mock.MagicMock()})
         mock_hook.assert_called_once_with(
             gcp_conn_id=GCP_CONN_ID,
             impersonation_chain=IMPERSONATION_CHAIN,
@@ -821,15 +815,15 @@ class TestBigtableTableCreate(unittest.TestCase):
             column_families=EMPTY_COLUMN_FAMILIES,
         )
 
-    @parameterized.expand(
+    @pytest.mark.parametrize(
+        "missing_attribute, project_id, instance_id, table_id",
         [
-            ('instance_id', PROJECT_ID, '', TABLE_ID),
-            ('table_id', PROJECT_ID, INSTANCE_ID, ''),
+            ("instance_id", PROJECT_ID, "", TABLE_ID),
+            ("table_id", PROJECT_ID, INSTANCE_ID, ""),
         ],
-        testcase_func_name=lambda f, n, p: 'test_empty_attribute.empty_' + p.args[0],
     )
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
-    def test_empty_attribute(self, missing_attribute, project_id, instance_id, table_id, mock_hook):
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
+    def test_empty_attribute(self, mock_hook, missing_attribute, project_id, instance_id, table_id):
         with pytest.raises(AirflowException) as ctx:
             BigtableCreateTableOperator(
                 project_id=project_id,
@@ -839,10 +833,10 @@ class TestBigtableTableCreate(unittest.TestCase):
                 gcp_conn_id=GCP_CONN_ID,
             )
         err = ctx.value
-        assert str(err) == f'Empty parameter: {missing_attribute}'
+        assert str(err) == f"Empty parameter: {missing_attribute}"
         mock_hook.assert_not_called()
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_instance_not_exists(self, mock_hook):
         op = BigtableCreateTableOperator(
             project_id=PROJECT_ID,
@@ -864,7 +858,7 @@ class TestBigtableTableCreate(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_creating_table_that_exists(self, mock_hook):
         op = BigtableCreateTableOperator(
             project_id=PROJECT_ID,
@@ -895,7 +889,7 @@ class TestBigtableTableCreate(unittest.TestCase):
             column_families=EMPTY_COLUMN_FAMILIES,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_creating_table_that_exists_empty_project_id(self, mock_hook):
         op = BigtableCreateTableOperator(
             instance_id=INSTANCE_ID,
@@ -925,7 +919,7 @@ class TestBigtableTableCreate(unittest.TestCase):
             column_families=EMPTY_COLUMN_FAMILIES,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_creating_table_that_exists_with_different_column_families_ids_in_the_table(self, mock_hook):
         op = BigtableCreateTableOperator(
             project_id=PROJECT_ID,
@@ -952,7 +946,7 @@ class TestBigtableTableCreate(unittest.TestCase):
             impersonation_chain=IMPERSONATION_CHAIN,
         )
 
-    @mock.patch('airflow.providers.google.cloud.operators.bigtable.BigtableHook')
+    @mock.patch("airflow.providers.google.cloud.operators.bigtable.BigtableHook")
     def test_creating_table_that_exists_with_different_column_families_gc_rule_in__table(self, mock_hook):
         op = BigtableCreateTableOperator(
             project_id=PROJECT_ID,

@@ -133,7 +133,7 @@ By default :class:`~airflow.providers.google.cloud.operators.dataflow.DataflowCr
 :class:`~airflow.providers.google.cloud.operators.dataflow.DataflowCreatePythonJobOperator`,
 :class:`~airflow.providers.google.cloud.operators.dataflow.DataflowTemplatedJobStartOperator` and
 :class:`~airflow.providers.google.cloud.operators.dataflow.DataflowStartFlexTemplateOperator`
-have argument ``wait_until_finished`` set to ``None`` which cause different behaviour depends om the type of pipeline:
+have argument ``wait_until_finished`` set to ``None`` which cause different behaviour depends on the type of pipeline:
 
 * for the streaming pipeline, wait for jobs to start,
 * for the batch pipeline, wait for the jobs to complete.
@@ -237,6 +237,24 @@ Here is an example of running Dataflow SQL job with
 
 See the `Dataflow SQL reference
 <https://cloud.google.com/dataflow/docs/reference/sql>`_.
+
+.. _howto/operator:DataflowStopJobOperator:
+
+Stopping a pipeline
+^^^^^^^^^^^^^^^^^^^
+To stop one or more Dataflow pipelines you can use
+:class:`~airflow.providers.google.cloud.operators.dataflow.DataflowStopJobOperator`.
+Streaming pipelines are drained by default, setting ``drain_pipeline`` to ``False`` will cancel them instead.
+Provide ``job_id`` to stop a specific job, or ``job_name_prefix`` to stop all jobs with provided name prefix.
+
+.. exampleinclude:: /../../airflow/providers/google/cloud/example_dags/example_dataflow.py
+    :language: python
+    :dedent: 4
+    :start-after: [START howto_operator_stop_dataflow_job]
+    :end-before: [END howto_operator_stop_dataflow_job]
+
+See: `Stopping a running pipeline
+<https://cloud.google.com/dataflow/docs/guides/stopping-a-pipeline>`_.
 
 .. _howto/operator:DataflowJobStatusSensor:
 .. _howto/operator:DataflowJobMetricsSensor:

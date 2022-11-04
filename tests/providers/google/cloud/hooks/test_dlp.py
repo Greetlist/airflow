@@ -15,26 +15,27 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-
 """
 This module contains various unit tests for
 functions in CloudDLPHook
 """
+from __future__ import annotations
 
 import unittest
-from typing import Any, Dict
+from typing import Any
 from unittest import mock
 from unittest.mock import PropertyMock
 
 import pytest
+from google.api_core.gapic_v1.method import DEFAULT
 from google.cloud.dlp_v2.types import DlpJob
 
 from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.hooks.dlp import CloudDLPHook
+from airflow.providers.google.common.consts import CLIENT_INFO
 from tests.providers.google.cloud.utils.base_gcp_mock import mock_base_gcp_hook_no_default_project_id
 
-API_RESPONSE = {}  # type: Dict[Any, Any]
+API_RESPONSE: dict[Any, Any] = {}
 ORGANIZATION_ID = "test-org"
 ORGANIZATION_PATH = f"organizations/{ORGANIZATION_ID}"
 PROJECT_ID = "test-project"
@@ -61,16 +62,11 @@ class TestCloudDLPHook(unittest.TestCase):
         ):
             self.hook = CloudDLPHook(gcp_conn_id="test")
 
-    @mock.patch(
-        "airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.client_info", new_callable=mock.PropertyMock
-    )
-    @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook._get_credentials")
+    @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_credentials")
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.DlpServiceClient")
-    def test_dlp_service_client_creation(self, mock_client, mock_get_creds, mock_client_info):
+    def test_dlp_service_client_creation(self, mock_client, mock_get_creds):
         result = self.hook.get_conn()
-        mock_client.assert_called_once_with(
-            credentials=mock_get_creds.return_value, client_info=mock_client_info.return_value
-        )
+        mock_client.assert_called_once_with(credentials=mock_get_creds.return_value, client_info=CLIENT_INFO)
         assert mock_client.return_value == result
         assert self.hook._client == result
 
@@ -79,7 +75,7 @@ class TestCloudDLPHook(unittest.TestCase):
         self.hook.cancel_dlp_job(dlp_job_id=DLP_JOB_ID, project_id=PROJECT_ID)
 
         get_conn.return_value.cancel_dlp_job.assert_called_once_with(
-            name=DLP_JOB_PATH, retry=None, timeout=None, metadata=None
+            name=DLP_JOB_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -88,7 +84,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.cancel_dlp_job(dlp_job_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -98,7 +94,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.cancel_dlp_job(dlp_job_id=DLP_JOB_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -112,9 +108,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             deidentify_template=None,
             template_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -127,13 +123,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             deidentify_template=None,
             template_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -153,13 +149,13 @@ class TestCloudDLPHook(unittest.TestCase):
             inspect_job=None,
             risk_job=None,
             job_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -178,11 +174,11 @@ class TestCloudDLPHook(unittest.TestCase):
         self.hook.create_dlp_job(project_id=PROJECT_ID)
 
         get_conn.return_value.get_dlp_job.assert_called_once_with(
-            name=DLP_JOB_PATH, retry=None, timeout=None, metadata=None
+            name=DLP_JOB_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -196,9 +192,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             inspect_template=None,
             template_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -211,13 +207,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             inspect_template=None,
             template_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -236,13 +232,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             job_trigger=None,
             trigger_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -252,7 +248,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.create_job_trigger()
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -266,9 +262,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             config=None,
             stored_info_type_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -281,13 +277,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             config=None,
             stored_info_type_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -309,13 +305,13 @@ class TestCloudDLPHook(unittest.TestCase):
             item=None,
             inspect_template_name=None,
             deidentify_template_name=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -325,7 +321,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.deidentify_content()
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -335,9 +331,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_deidentify_template.assert_called_once_with(
             name=DEIDENTIFY_TEMPLATE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -346,9 +342,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_deidentify_template.assert_called_once_with(
             name=DEIDENTIFY_TEMPLATE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -357,7 +353,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_deidentify_template(template_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -371,7 +367,7 @@ class TestCloudDLPHook(unittest.TestCase):
         self.hook.delete_dlp_job(dlp_job_id=DLP_JOB_ID, project_id=PROJECT_ID)
 
         get_conn.return_value.delete_dlp_job.assert_called_once_with(
-            name=DLP_JOB_PATH, retry=None, timeout=None, metadata=None
+            name=DLP_JOB_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -380,7 +376,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_dlp_job(dlp_job_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -390,7 +386,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_dlp_job(dlp_job_id=DLP_JOB_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -400,9 +396,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_inspect_template.assert_called_once_with(
             name=INSPECT_TEMPLATE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -411,9 +407,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_inspect_template.assert_called_once_with(
             name=INSPECT_TEMPLATE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -422,7 +418,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_inspect_template(template_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -436,7 +432,7 @@ class TestCloudDLPHook(unittest.TestCase):
         self.hook.delete_job_trigger(job_trigger_id=TRIGGER_ID, project_id=PROJECT_ID)
 
         get_conn.return_value.delete_job_trigger.assert_called_once_with(
-            name=JOB_TRIGGER_PATH, retry=None, timeout=None, metadata=None
+            name=JOB_TRIGGER_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -445,7 +441,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_job_trigger(job_trigger_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -455,7 +451,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_job_trigger(job_trigger_id=TRIGGER_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -467,9 +463,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_stored_info_type.assert_called_once_with(
             name=STORED_INFO_TYPE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -478,9 +474,9 @@ class TestCloudDLPHook(unittest.TestCase):
 
         get_conn.return_value.delete_stored_info_type.assert_called_once_with(
             name=STORED_INFO_TYPE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -489,7 +485,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_stored_info_type(stored_info_type_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -499,7 +495,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.delete_stored_info_type(stored_info_type_id=STORED_INFO_TYPE_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -511,9 +507,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_deidentify_template.assert_called_once_with(
             name=DEIDENTIFY_TEMPLATE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -524,9 +520,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_deidentify_template.assert_called_once_with(
             name=DEIDENTIFY_TEMPLATE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -535,7 +531,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_deidentify_template(template_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -551,7 +547,7 @@ class TestCloudDLPHook(unittest.TestCase):
 
         assert result is API_RESPONSE
         get_conn.return_value.get_dlp_job.assert_called_once_with(
-            name=DLP_JOB_PATH, retry=None, timeout=None, metadata=None
+            name=DLP_JOB_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -560,7 +556,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_dlp_job(dlp_job_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -570,7 +566,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_dlp_job(dlp_job_id=DLP_JOB_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -582,9 +578,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_inspect_template.assert_called_once_with(
             name=INSPECT_TEMPLATE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -595,9 +591,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_inspect_template.assert_called_once_with(
             name=INSPECT_TEMPLATE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -606,7 +602,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_inspect_template(template_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -622,7 +618,7 @@ class TestCloudDLPHook(unittest.TestCase):
 
         assert result is API_RESPONSE
         get_conn.return_value.get_job_trigger.assert_called_once_with(
-            name=JOB_TRIGGER_PATH, retry=None, timeout=None, metadata=None
+            name=JOB_TRIGGER_PATH, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -631,7 +627,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_job_trigger(job_trigger_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -641,7 +637,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_job_trigger(job_trigger_id=TRIGGER_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -655,9 +651,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_stored_info_type.assert_called_once_with(
             name=STORED_INFO_TYPE_ORGANIZATION_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -670,9 +666,9 @@ class TestCloudDLPHook(unittest.TestCase):
         assert result is API_RESPONSE
         get_conn.return_value.get_stored_info_type.assert_called_once_with(
             name=STORED_INFO_TYPE_PROJECT_PATH,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -681,7 +677,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.get_stored_info_type(stored_info_type_id=None)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -701,13 +697,13 @@ class TestCloudDLPHook(unittest.TestCase):
             inspect_config=None,
             item=None,
             inspect_template_name=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -717,7 +713,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.inspect_content()
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -730,9 +726,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -744,13 +740,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -770,13 +766,13 @@ class TestCloudDLPHook(unittest.TestCase):
             page_size=None,
             type_=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -792,11 +788,11 @@ class TestCloudDLPHook(unittest.TestCase):
 
         assert result is API_RESPONSE
         get_conn.return_value.list_info_types.assert_called_once_with(
-            language_code=None, filter_=None, retry=None, timeout=None, metadata=None
+            language_code=None, filter_=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -809,9 +805,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -823,13 +819,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -848,13 +844,13 @@ class TestCloudDLPHook(unittest.TestCase):
             page_size=None,
             order_by=None,
             filter_=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -864,7 +860,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.list_job_triggers()
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -877,9 +873,9 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=ORGANIZATION_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -891,13 +887,13 @@ class TestCloudDLPHook(unittest.TestCase):
             parent=PROJECT_PATH,
             page_size=None,
             order_by=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -918,13 +914,13 @@ class TestCloudDLPHook(unittest.TestCase):
             image_redaction_configs=None,
             include_findings=None,
             byte_item=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -946,13 +942,13 @@ class TestCloudDLPHook(unittest.TestCase):
             item=None,
             inspect_template_name=None,
             reidentify_template_name=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -962,7 +958,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.reidentify_content()
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -978,9 +974,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=DEIDENTIFY_TEMPLATE_ORGANIZATION_PATH,
             deidentify_template=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -993,9 +989,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=DEIDENTIFY_TEMPLATE_PROJECT_PATH,
             deidentify_template=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1004,7 +1000,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_deidentify_template(template_id=None, organization_id=ORGANIZATION_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -1014,7 +1010,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_deidentify_template(template_id=TEMPLATE_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -1028,9 +1024,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=INSPECT_TEMPLATE_ORGANIZATION_PATH,
             inspect_template=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1043,9 +1039,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=INSPECT_TEMPLATE_PROJECT_PATH,
             inspect_template=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1054,7 +1050,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_inspect_template(template_id=None, organization_id=ORGANIZATION_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -1073,9 +1069,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=JOB_TRIGGER_PATH,
             job_trigger=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1084,7 +1080,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_job_trigger(job_trigger_id=None, project_id=PROJECT_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -1094,7 +1090,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_job_trigger(job_trigger_id=TRIGGER_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )
@@ -1110,9 +1106,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=STORED_INFO_TYPE_ORGANIZATION_PATH,
             config=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1127,9 +1123,9 @@ class TestCloudDLPHook(unittest.TestCase):
             name=STORED_INFO_TYPE_PROJECT_PATH,
             config=None,
             update_mask=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.hooks.dlp.CloudDLPHook.get_conn")
@@ -1138,7 +1134,7 @@ class TestCloudDLPHook(unittest.TestCase):
             self.hook.update_stored_info_type(stored_info_type_id=None, organization_id=ORGANIZATION_ID)
 
     @mock.patch(
-        'airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id',
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.project_id",
         new_callable=PropertyMock,
         return_value=None,
     )

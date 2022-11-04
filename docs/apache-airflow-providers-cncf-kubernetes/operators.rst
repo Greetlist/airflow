@@ -49,6 +49,41 @@ dependencies that are not available through the public PyPI repository. It also 
 YAML file using the ``pod_template_file`` parameter.
 Ultimately, it allows Airflow to act a job orchestrator - no matter the language those jobs are written in.
 
+Debugging KubernetesPodOperator
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can print out the Kubernetes manifest for the pod that would be created at runtime by calling
+:meth:`~.KubernetesPodOperator.dry_run` on an instance of the operator.
+
+.. code-block:: python
+
+    from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+
+    k = KubernetesPodOperator(
+        name="hello-dry-run",
+        image="debian",
+        cmds=["bash", "-cx"],
+        arguments=["echo", "10"],
+        labels={"foo": "bar"},
+        task_id="dry_run_demo",
+        do_xcom_push=True,
+    )
+
+    k.dry_run()
+
+Argument precedence
+^^^^^^^^^^^^^^^^^^^
+
+When building the pod object, there may be overlap between KPO params, pod spec, template and airflow connection.
+In general, the order of precedence is KPO argument > full pod spec > pod template file > airflow connection.
+
+For ``namespace``, if namespace is not provided via any of these methods, then we'll first try to
+get the current namespace (if the task is already running in kubernetes) and failing that we'll use
+the ``default`` namespace.
+
+For pod name, if not provided explicitly, we'll use the task_id. A random suffix is added by default so the pod
+name is not generally of great consequence.
+
 How to use cluster ConfigMaps, Secrets, and Volumes with Pod?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -64,7 +99,7 @@ Using this method will ensure correctness
 and type safety. While we have removed almost all Kubernetes convenience classes, we have kept the
 :class:`~airflow.kubernetes.secret.Secret` class to simplify the process of generating secret volumes/env variables.
 
-.. exampleinclude:: /../../airflow/providers/cncf/kubernetes/example_dags/example_kubernetes.py
+.. exampleinclude:: /../../tests/system/providers/cncf/kubernetes/example_kubernetes.py
     :language: python
     :start-after: [START howto_operator_k8s_cluster_resources]
     :end-before: [END howto_operator_k8s_cluster_resources]
@@ -97,7 +132,7 @@ Create the Secret using ``kubectl``:
 
 Then use it in your pod like so:
 
-.. exampleinclude:: /../../airflow/providers/cncf/kubernetes/example_dags/example_kubernetes.py
+.. exampleinclude:: /../../tests/system/providers/cncf/kubernetes/example_kubernetes.py
     :language: python
     :start-after: [START howto_operator_k8s_private_image]
     :end-before: [END howto_operator_k8s_private_image]
@@ -111,7 +146,7 @@ alongside the Pod. The Pod must write the XCom value into this location at the `
 
 See the following example on how this occurs:
 
-.. exampleinclude:: /../../airflow/providers/cncf/kubernetes/example_dags/example_kubernetes.py
+.. exampleinclude:: /../../tests/system/providers/cncf/kubernetes/example_kubernetes.py
     :language: python
     :start-after: [START howto_operator_k8s_write_xcom]
     :end-before: [END howto_operator_k8s_write_xcom]

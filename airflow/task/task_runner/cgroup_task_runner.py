@@ -15,8 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 """Task runner for cgroup to run Airflow task"""
+from __future__ import annotations
 
 import datetime
 import os
@@ -72,14 +72,13 @@ class CgroupTaskRunner(BaseTaskRunner):
         self._created_mem_cgroup = False
         self._cur_user = getuser()
 
-    def _create_cgroup(self, path):
+    def _create_cgroup(self, path) -> trees.Node:
         """
         Create the specified cgroup.
 
         :param path: The path of the cgroup to create.
         E.g. cpu/mygroup/mysubgroup
         :return: the Node associated with the created cgroup.
-        :rtype: cgroupspy.nodes.Node
         """
         node = trees.Tree().root
         path_split = path.split(os.sep)
@@ -146,11 +145,11 @@ class CgroupTaskRunner(BaseTaskRunner):
         self._mem_mb_limit = resources.ram.qty
 
         # Create the memory cgroup
-        mem_cgroup_node = self._create_cgroup(self.mem_cgroup_name)
+        self.mem_cgroup_node = self._create_cgroup(self.mem_cgroup_name)
         self._created_mem_cgroup = True
         if self._mem_mb_limit > 0:
             self.log.debug("Setting %s with %s MB of memory", self.mem_cgroup_name, self._mem_mb_limit)
-            mem_cgroup_node.controller.limit_in_bytes = self._mem_mb_limit * 1024 * 1024
+            self.mem_cgroup_node.controller.limit_in_bytes = self._mem_mb_limit * 1024 * 1024
 
         # Create the CPU cgroup
         cpu_cgroup_node = self._create_cgroup(self.cpu_cgroup_name)
@@ -163,7 +162,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         self.log.debug("Starting task process with cgroups cpu,memory: %s", cgroup_name)
         self.process = self.run_command(['cgexec', '-g', f'cpu,memory:{cgroup_name}'])
 
-    def return_code(self):
+    def return_code(self, timeout: int = 0) -> int | None:
         return_code = self.process.poll()
         # TODO(plypaul) Monitoring the control file in the cgroup fs is better than
         # checking the return code here. The PR to use this is here:
@@ -185,21 +184,43 @@ class CgroupTaskRunner(BaseTaskRunner):
         if self.process and psutil.pid_exists(self.process.pid):
             reap_process_group(self.process.pid, self.log)
 
+    def _log_memory_usage(self, mem_cgroup_node):
+        def byte_to_gb(num_bytes, precision=2):
+            return round(num_bytes / (1024 * 1024 * 1024), precision)
+
+        with open(mem_cgroup_node.full_path + '/memory.max_usage_in_bytes') as f:
+            max_usage_in_bytes = int(f.read().strip())
+
+        used_gb = byte_to_gb(max_usage_in_bytes)
+        limit_gb = byte_to_gb(mem_cgroup_node.controller.limit_in_bytes)
+
+        self.log.info(
+            "Memory max usage of the task is %s GB, while the memory limit is %s GB", used_gb, limit_gb
+        )
+
+        if max_usage_in_bytes >= mem_cgroup_node.controller.limit_in_bytes:
+            self.log.info(
+                "This task has reached the memory limit allocated by Airflow worker. "
+                "If it failed, try to optimize the task or reserve more memory."
+            )
+
     def on_finish(self):
         # Let the OOM watcher thread know we're done to avoid false OOM alarms
         self._finished_running = True
         # Clean up the cgroups
         if self._created_mem_cgroup:
+            self._log_memory_usage(self.mem_cgroup_node)
             self._delete_cgroup(self.mem_cgroup_name)
         if self._created_cpu_cgroup:
             self._delete_cgroup(self.cpu_cgroup_name)
         super().on_finish()
 
     @staticmethod
-    def _get_cgroup_names():
+    def _get_cgroup_names() -> dict[str, str]:
         """
+        Get the mapping between the subsystem name and the cgroup name.
+
         :return: a mapping between the subsystem name to the cgroup name
-        :rtype: dict[str, str]
         """
         with open("/proc/self/cgroup") as file:
             lines = file.readlines()

@@ -15,17 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import shutil
-from typing import Dict, Optional, Tuple
+from typing import Any
 
 from azure.common import AzureHttpError
 
-try:
-    from functools import cached_property
-except ImportError:
-    from cached_property import cached_property
-
+from airflow.compat.functools import cached_property
 from airflow.configuration import conf
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -43,13 +41,14 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         base_log_folder: str,
         wasb_log_folder: str,
         wasb_container: str,
-        filename_template: str,
         delete_local_copy: str,
+        *,
+        filename_template: str | None = None,
     ) -> None:
         super().__init__(base_log_folder, filename_template)
         self.wasb_container = wasb_container
         self.remote_base = wasb_log_folder
-        self.log_relative_path = ''
+        self.log_relative_path = ""
         self._hook = None
         self.closed = False
         self.upload_on_close = True
@@ -58,7 +57,7 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
     @cached_property
     def hook(self):
         """Returns WasbHook."""
-        remote_conn_id = conf.get('logging', 'REMOTE_LOG_CONN_ID')
+        remote_conn_id = conf.get("logging", "REMOTE_LOG_CONN_ID")
         try:
             from airflow.providers.microsoft.azure.hooks.wasb import WasbHook
 
@@ -66,8 +65,8 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         except AzureHttpError:
             self.log.exception(
                 'Could not create an WasbHook with connection id "%s".'
-                ' Please make sure that apache-airflow[azure] is installed'
-                ' and the Wasb connection exists.',
+                " Please make sure that apache-airflow[azure] is installed"
+                " and the Wasb connection exists.",
                 remote_conn_id,
             )
             return None
@@ -106,7 +105,9 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         # Mark closed so we don't double write if close is called twice
         self.closed = True
 
-    def _read(self, ti, try_number: str, metadata: Optional[str] = None) -> Tuple[str, Dict[str, bool]]:
+    def _read(
+        self, ti, try_number: int, metadata: dict[str, Any] | None = None
+    ) -> tuple[str, dict[str, bool]]:
         """
         Read logs of given task instance and try_number from Wasb remote storage.
         If failed, read the log from task instance host machine.
@@ -127,10 +128,10 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
             # local machine even if there are errors reading remote logs, as
             # returned remote_log will contain error messages.
             remote_log = self.wasb_read(remote_loc, return_error=True)
-            log = f'*** Reading remote log from {remote_loc}.\n{remote_log}\n'
-            return log, {'end_of_log': True}
+            log = f"*** Reading remote log from {remote_loc}.\n{remote_log}\n"
+            return log, {"end_of_log": True}
         else:
-            return super()._read(ti, try_number)
+            return super()._read(ti, try_number, metadata)
 
     def wasb_log_exists(self, remote_log_location: str) -> bool:
         """
@@ -152,20 +153,18 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         logs are found or there is an error.
 
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param return_error: if True, returns a string error message if an
             error occurs. Otherwise returns '' when an error occurs.
-        :type return_error: bool
         """
         try:
             return self.hook.read_file(self.wasb_container, remote_log_location)
         except AzureHttpError:
-            msg = f'Could not read logs from {remote_log_location}'
+            msg = f"Could not read logs from {remote_log_location}"
             self.log.exception(msg)
             # return error if needed
             if return_error:
                 return msg
-            return ''
+            return ""
 
     def wasb_write(self, log: str, remote_log_location: str, append: bool = True) -> None:
         """
@@ -173,18 +172,15 @@ class WasbTaskHandler(FileTaskHandler, LoggingMixin):
         was created.
 
         :param log: the log to write to the remote_log_location
-        :type log: str
         :param remote_log_location: the log's location in remote storage
-        :type remote_log_location: str (path)
         :param append: if False, any existing log file is overwritten. If True,
             the new log is appended to any existing logs.
-        :type append: bool
         """
         if append and self.wasb_log_exists(remote_log_location):
             old_log = self.wasb_read(remote_log_location)
-            log = '\n'.join([old_log, log]) if old_log else log
+            log = "\n".join([old_log, log]) if old_log else log
 
         try:
             self.hook.load_string(log, self.wasb_container, remote_log_location, overwrite=True)
         except AzureHttpError:
-            self.log.exception('Could not write logs to %s', remote_log_location)
+            self.log.exception("Could not write logs to %s", remote_log_location)

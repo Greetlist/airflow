@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-/* global $, moment, Airflow, window, localStorage, document, hostName, csrfToken */
+/* global $, moment, Airflow, window, localStorage, document, hostName, csrfToken, CustomEvent */
 
 import {
   dateTimeAttrFormat,
   formatTimezone,
   isoDateToTimeEl,
   setDisplayedTimezone,
+  TimezoneEvent,
 } from './datetime_utils';
 
 window.isoDateToTimeEl = isoDateToTimeEl;
@@ -41,8 +42,15 @@ function displayTime() {
     .html(`${now.format('HH:mm')} <strong>${formatTimezone(now)}</strong>`);
 }
 
-function changDisplayedTimezone(tz) {
+function changeDisplayedTimezone(tz) {
   localStorage.setItem('selected-timezone', tz);
+
+  // dispatch an event that React can listen for
+  const event = new CustomEvent(TimezoneEvent, {
+    detail: tz,
+  });
+  document.dispatchEvent(event);
+
   setDisplayedTimezone(tz);
   displayTime();
   $('body').trigger({
@@ -147,7 +155,7 @@ function initializeUITimezone() {
     setManualTimezone(manualTz);
   }
 
-  changDisplayedTimezone(selectedTz || Airflow.defaultUITimezone);
+  changeDisplayedTimezone(selectedTz || Airflow.defaultUITimezone);
 
   if (Airflow.serverTimezone !== 'UTC') {
     $('#timezone-server a').html(`${formatTimezone(Airflow.serverTimezone)} <span class="label label-primary">Server</span>`);
@@ -163,7 +171,7 @@ function initializeUITimezone() {
   }
 
   $('a[data-timezone]').click((evt) => {
-    changDisplayedTimezone($(evt.target).data('timezone'));
+    changeDisplayedTimezone($(evt.currentTarget).data('timezone'));
   });
 
   $('#timezone-other').typeahead({
@@ -179,7 +187,7 @@ function initializeUITimezone() {
       this.$element.val('');
 
       setManualTimezone(data.tzName);
-      changDisplayedTimezone(data.tzName);
+      changeDisplayedTimezone(data.tzName);
 
       // We need to delay the close event to not be in the form handler,
       // otherwise bootstrap ignores it, thinking it's caused by interaction on
@@ -192,6 +200,35 @@ function initializeUITimezone() {
       }, 1);
     },
   });
+}
+
+function filterOpSelected(ele) {
+  const op = $(ele);
+  const filterVal = $('.filter_val.form-control', op.parents('tr'));
+
+  if (op.text() === 'Is Null' || op.text() === 'Is not Null') {
+    if (filterVal.attr('required') !== undefined) {
+      filterVal.removeAttr('required');
+      filterVal.attr('airflow-required', true);
+    }
+
+    if (filterVal.parent('.datetime').length === 1) {
+      filterVal.parent('.datetime').hide();
+    } else {
+      filterVal.hide();
+    }
+  } else {
+    if (filterVal.attr('airflow-required') === 'true') {
+      filterVal.attr('required', true);
+      filterVal.removeAttr('airflow-required');
+    }
+
+    if (filterVal.parent('.datetime').length === 1) {
+      filterVal.parent('.datetime').show();
+    } else {
+      filterVal.show();
+    }
+  }
 }
 
 $(document).ready(() => {
@@ -218,10 +255,14 @@ $(document).ready(() => {
   $.fn.datetimepicker.defaults.sideBySide = true;
   $('.datetimepicker').datetimepicker();
 
+  $('.filters .select2-chosen').each((idx, elem) => { filterOpSelected(elem); });
+  $('.filters .select2-chosen').on('DOMNodeInserted', (e) => { filterOpSelected(e.target); });
+
   // Fix up filter fields from FAB adds to the page. This event is fired after
   // the FAB registered one which adds the new control
   $('#filter_form a.filter').click(() => {
     $('.datetimepicker').datetimepicker();
+    $('.filters .select2-chosen').on('DOMNodeInserted', (e) => { filterOpSelected(e.target); });
   });
 
   // Global Tooltip selector

@@ -16,9 +16,11 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for Cloudant"""
-from typing import Dict
+from __future__ import annotations
 
-from cloudant import cloudant
+from typing import Any
+
+from cloudant import cloudant  # type: ignore[attr-defined]
 
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
@@ -31,20 +33,19 @@ class CloudantHook(BaseHook):
     .. seealso:: the latest documentation `here <https://python-cloudant.readthedocs.io/en/latest/>`_.
 
     :param cloudant_conn_id: The connection id to authenticate and get a session object from cloudant.
-    :type cloudant_conn_id: str
     """
 
-    conn_name_attr = 'cloudant_conn_id'
-    default_conn_name = 'cloudant_default'
-    conn_type = 'cloudant'
-    hook_name = 'Cloudant'
+    conn_name_attr = "cloudant_conn_id"
+    default_conn_name = "cloudant_default"
+    conn_type = "cloudant"
+    hook_name = "Cloudant"
 
     @staticmethod
-    def get_ui_field_behaviour() -> Dict:
+    def get_ui_field_behaviour() -> dict[str, Any]:
         """Returns custom field behaviour"""
         return {
-            "hidden_fields": ['port', 'extra'],
-            "relabeling": {'host': 'Account', 'login': 'Username (or API Key)', 'schema': 'Database'},
+            "hidden_fields": ["port", "extra"],
+            "relabeling": {"host": "Account", "login": "Username (or API Key)", "schema": "Database"},
         }
 
     def __init__(self, cloudant_conn_id: str = default_conn_name) -> None:
@@ -62,7 +63,6 @@ class CloudantHook(BaseHook):
             - 'password' equals the 'Password' (required)
 
         :return: an authorized cloudant session context manager object.
-        :rtype: cloudant
         """
         conn = self.get_connection(self.cloudant_conn_id)
 
@@ -73,6 +73,6 @@ class CloudantHook(BaseHook):
         return cloudant_session
 
     def _validate_connection(self, conn: cloudant) -> None:
-        for conn_param in ['login', 'password']:
+        for conn_param in ["login", "password"]:
             if not getattr(conn, conn_param):
-                raise AirflowException(f'missing connection parameter {conn_param}')
+                raise AirflowException(f"missing connection parameter {conn_param}")

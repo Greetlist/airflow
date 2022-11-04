@@ -14,17 +14,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import logging
 import uuid
-from typing import List, Optional
 
 from flask_appbuilder import const as c
 from flask_appbuilder.models.sqla import Base
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from sqlalchemy import and_, func, literal
-from sqlalchemy.engine.reflection import Inspector
-from sqlalchemy.orm import contains_eager
+from sqlalchemy import and_, func, inspect, literal
 from sqlalchemy.orm.exc import MultipleResultsFound
 from werkzeug.security import generate_password_hash
 
@@ -100,7 +98,7 @@ class SecurityManager(BaseSecurityManager):
     def create_db(self):
         try:
             engine = self.get_session.get_bind(mapper=None, clause=None)
-            inspector = Inspector.from_engine(engine)
+            inspector = inspect(engine)
             if "ab_user" not in inspector.get_table_names():
                 log.info(c.LOGMSG_INF_SEC_NO_DB)
                 Base.metadata.create_all(engine)
@@ -170,17 +168,17 @@ class SecurityManager(BaseSecurityManager):
                 else:
                     return (
                         self.get_session.query(self.user_model)
-                        .filter(self.user_model.username == username)
+                        .filter(func.lower(self.user_model.username) == func.lower(username))
                         .one_or_none()
                     )
             except MultipleResultsFound:
-                log.error(f"Multiple results found for user {username}")
+                log.error("Multiple results found for user %s", username)
                 return None
         elif email:
             try:
                 return self.get_session.query(self.user_model).filter_by(email=email).one_or_none()
             except MultipleResultsFound:
-                log.error(f"Multiple results found for user with email {email}")
+                log.error("Multiple results found for user with email %s", email)
                 return None
 
     def get_all_users(self):
@@ -234,7 +232,7 @@ class SecurityManager(BaseSecurityManager):
     def get_user_by_id(self, pk):
         return self.get_session.query(self.user_model).get(pk)
 
-    def add_role(self, name: str) -> Optional[Role]:
+    def add_role(self, name: str) -> Role | None:
         role = self.find_role(name)
         if role is None:
             try:
@@ -249,10 +247,10 @@ class SecurityManager(BaseSecurityManager):
                 self.get_session.rollback()
         return role
 
-    def update_role(self, role_id, name: str) -> Optional[Role]:
+    def update_role(self, role_id, name: str) -> Role | None:
         role = self.get_session.query(self.role_model).get(role_id)
         if not role:
-            return
+            return None
         try:
             role.name = name
             self.get_session.merge(role)
@@ -261,7 +259,8 @@ class SecurityManager(BaseSecurityManager):
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_UPD_ROLE.format(str(e)))
             self.get_session.rollback()
-            return
+            return None
+        return role
 
     def find_role(self, name):
         return self.get_session.query(self.role_model).filter_by(name=name).one_or_none()
@@ -272,25 +271,17 @@ class SecurityManager(BaseSecurityManager):
     def get_public_role(self):
         return self.get_session.query(self.role_model).filter_by(name=self.auth_role_public).one_or_none()
 
-    def get_public_permissions(self):
-        role = self.get_public_role()
-        if role:
-            return role.permissions
-        return []
-
     def get_action(self, name: str) -> Action:
         """
         Gets an existing action record.
 
         :param name: name
-        :type name: str
         :return: Action record, if it exists
-        :rtype: Action
         """
         return self.get_session.query(self.action_model).filter_by(name=name).one_or_none()
 
     def permission_exists_in_one_or_more_roles(
-        self, resource_name: str, action_name: str, role_ids: List[int]
+        self, resource_name: str, action_name: str, role_ids: list[int]
     ) -> bool:
         """
             Method to efficiently check if a certain permission exists
@@ -322,7 +313,7 @@ class SecurityManager(BaseSecurityManager):
             return self.appbuilder.get_session.query(literal(True)).filter(q).scalar()
         return self.appbuilder.get_session.query(q).scalar()
 
-    def filter_roles_by_perm_with_action(self, action_name: str, role_ids: List[int]):
+    def filter_roles_by_perm_with_action(self, action_name: str, role_ids: list[int]):
         """Find roles with permission"""
         return (
             self.appbuilder.get_session.query(self.permission_model)
@@ -338,19 +329,6 @@ class SecurityManager(BaseSecurityManager):
                 self.role_model.id.in_(role_ids),
             )
         ).all()
-
-    def get_role_permissions_from_db(self, role_id: int) -> List[Permission]:
-        """Get all DB permissions from a role (one single query)"""
-        return (
-            self.appbuilder.get_session.query(Permission)
-            .join(Action)
-            .join(Resource)
-            .join(Permission.role)
-            .filter(Role.id == role_id)
-            .options(contains_eager(Permission.action))
-            .options(contains_eager(Permission.resource))
-            .all()
-        )
 
     def create_action(self, name):
         """
@@ -377,9 +355,7 @@ class SecurityManager(BaseSecurityManager):
         Deletes a permission action.
 
         :param name: Name of action to delete (e.g. can_read).
-        :type name: str
         :return: Whether or not delete was successful.
-        :rtype: bool
         """
         action = self.get_action(name)
         if not action:
@@ -407,18 +383,15 @@ class SecurityManager(BaseSecurityManager):
         Returns a resource record by name, if it exists.
 
         :param name: Name of resource
-        :type name: str
         :return: Resource record
-        :rtype: Resource
         """
         return self.get_session.query(self.resource_model).filter_by(name=name).one_or_none()
 
-    def get_all_resources(self) -> List[Resource]:
+    def get_all_resources(self) -> list[Resource]:
         """
         Gets all existing resource records.
 
         :return: List of all resources
-        :rtype: List[Resource]
         """
         return self.get_session.query(self.resource_model).all()
 
@@ -427,9 +400,7 @@ class SecurityManager(BaseSecurityManager):
         Create a resource with the given name.
 
         :param name: The name of the resource to create created.
-        :type name: str
         :return: The FAB resource created.
-        :rtype: Resource
         """
         resource = self.get_resource(name)
         if resource is None:
@@ -478,16 +449,17 @@ class SecurityManager(BaseSecurityManager):
     ----------------------
     """
 
-    def get_permission(self, action_name: str, resource_name: str) -> Permission:
+    def get_permission(
+        self,
+        action_name: str,
+        resource_name: str,
+    ) -> Permission | None:
         """
         Gets a permission made with the given action->resource pair, if the permission already exists.
 
         :param action_name: Name of action
-        :type action_name: str
         :param resource_name: Name of resource
-        :type resource_name: str
         :return: The existing permission
-        :rtype: Permission
         """
         action = self.get_action(action_name)
         resource = self.get_resource(resource_name)
@@ -497,19 +469,18 @@ class SecurityManager(BaseSecurityManager):
                 .filter_by(action=action, resource=resource)
                 .one_or_none()
             )
+        return None
 
     def get_resource_permissions(self, resource: Resource) -> Permission:
         """
         Retrieve permission pairs associated with a specific resource object.
 
         :param resource: Object representing a single resource.
-        :type resource: Resource
         :return: Action objects representing resource->action pair
-        :rtype: Permission
         """
         return self.get_session.query(self.permission_model).filter_by(resource_id=resource.id).all()
 
-    def create_permission(self, action_name, resource_name):
+    def create_permission(self, action_name, resource_name) -> Permission | None:
         """
         Adds a permission on a resource to the backend
 
@@ -535,6 +506,7 @@ class SecurityManager(BaseSecurityManager):
         except Exception as e:
             log.error(c.LOGMSG_ERR_SEC_ADD_PERMVIEW.format(str(e)))
             self.get_session.rollback()
+            return None
 
     def delete_permission(self, action_name: str, resource_name: str) -> None:
         """
@@ -542,11 +514,8 @@ class SecurityManager(BaseSecurityManager):
         underlying action or resource.
 
         :param action_name: Name of existing action
-        :type action_name: str
         :param resource_name: Name of existing resource
-        :type resource_name: str
         :return: None
-        :rtype: None
         """
         if not (action_name and resource_name):
             return
@@ -582,11 +551,8 @@ class SecurityManager(BaseSecurityManager):
         Add an existing permission pair to a role.
 
         :param role: The role about to get a new permission.
-        :type role: Role
         :param permission: The permission pair to add to a role.
-        :type permission: Permission
         :return: None
-        :rtype: None
         """
         if permission and permission not in role.permissions:
             try:
@@ -603,9 +569,7 @@ class SecurityManager(BaseSecurityManager):
         Remove a permission pair from a role.
 
         :param role: User role containing permissions.
-        :type role: Role
         :param permission: Object representing resource-> action pair
-        :type permission: Permission
         """
         if permission in role.permissions:
             try:

@@ -15,11 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-# pylint: disable=R0904, C0111
 """
 This module contains various unit tests for GCP Cloud Build Operators
 """
+from __future__ import annotations
 
 import json
 import tempfile
@@ -27,6 +26,7 @@ from copy import deepcopy
 from unittest import TestCase, mock
 
 import pytest
+from google.api_core.gapic_v1.method import DEFAULT
 from google.cloud.devtools.cloudbuild_v1.types import Build, BuildTrigger, RepoSource, StorageSource
 from parameterized import parameterized
 
@@ -45,6 +45,9 @@ from airflow.providers.google.cloud.operators.cloud_build import (
     CloudBuildRunBuildTriggerOperator,
     CloudBuildUpdateBuildTriggerOperator,
 )
+
+# pylint: disable=R0904, C0111
+
 
 GCP_CONN_ID = "google_cloud_default"
 PROJECT_ID = "cloud-build-project"
@@ -69,45 +72,36 @@ class TestCloudBuildOperator(TestCase):
     def test_cancel_build(self, mock_hook):
         mock_hook.return_value.cancel_build.return_value = Build()
         operator = CloudBuildCancelBuildOperator(id_=TRIGGER_ID, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.cancel_build.assert_called_once_with(
-            id_=TRIGGER_ID, project_id=None, retry=None, timeout=None, metadata=None
+            id_=TRIGGER_ID, project_id=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_create_build(self, mock_hook):
         mock_hook.return_value.create_build.return_value = Build()
         operator = CloudBuildCreateBuildOperator(build=BUILD, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         build = Build(BUILD)
         mock_hook.return_value.create_build.assert_called_once_with(
-            build=build, project_id=None, wait=True, retry=None, timeout=None, metadata=None
+            build=build, project_id=None, wait=True, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
-    def test_create_build_with_body(self, mock_hook):
+    def test_create_build_with_missing_build(self, mock_hook):
         mock_hook.return_value.create_build.return_value = Build()
-        operator = CloudBuildCreateBuildOperator(body=BUILD, task_id="id")
-        operator.execute(context=None)
-        mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
-        build = Build(BUILD)
-        mock_hook.return_value.create_build.assert_called_once_with(
-            build=build, project_id=None, wait=True, retry=None, timeout=None, metadata=None
-        )
-
-    @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
-    def test_create_build_with_body_and_build(self, mock_hook):
-        mock_hook.return_value.create_build.return_value = Build()
-        with pytest.raises(AirflowException, match="Either build or body should be passed."):
-            CloudBuildCreateBuildOperator(build=BUILD, body=BUILD, task_id="id")
+        with pytest.raises(AirflowException, match="missing keyword argument 'build'"):
+            CloudBuildCreateBuildOperator(task_id="id")
 
     @parameterized.expand(
         [
             (
                 ".json",
-                json.dumps({"steps": [{"name": 'ubuntu', "args": ['echo', 'Hello {{ params.name }}!']}]}),
+                json.dumps({"steps": [{"name": "ubuntu", "args": ["echo", "Hello {{ params.name }}!"]}]}),
             ),
             (
                 ".yaml",
@@ -120,113 +114,121 @@ class TestCloudBuildOperator(TestCase):
         ]
     )
     def test_load_templated(self, file_type, file_content):
-        with tempfile.NamedTemporaryFile(suffix=file_type, mode='w+') as f:
+        with tempfile.NamedTemporaryFile(suffix=file_type, mode="w+") as f:
             f.writelines(file_content)
             f.flush()
 
             operator = CloudBuildCreateBuildOperator(
-                build=f.name, task_id="task-id", params={'name': 'airflow'}
+                build=f.name, task_id="task-id", params={"name": "airflow"}
             )
             operator.prepare_template()
-            expected_body = {'steps': [{'name': 'ubuntu', 'args': ['echo', 'Hello {{ params.name }}!']}]}
+            expected_body = {"steps": [{"name": "ubuntu", "args": ["echo", "Hello {{ params.name }}!"]}]}
             assert expected_body == operator.build
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_create_build_trigger(self, mock_hook):
         mock_hook.return_value.create_build_trigger.return_value = BuildTrigger()
         operator = CloudBuildCreateBuildTriggerOperator(trigger=BUILD_TRIGGER, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.create_build_trigger.assert_called_once_with(
-            trigger=BUILD_TRIGGER, project_id=None, retry=None, timeout=None, metadata=None
+            trigger=BUILD_TRIGGER, project_id=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_delete_build_trigger(self, mock_hook):
         mock_hook.return_value.delete_build_trigger.return_value = None
         operator = CloudBuildDeleteBuildTriggerOperator(trigger_id=TRIGGER_ID, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.delete_build_trigger.assert_called_once_with(
-            trigger_id=TRIGGER_ID, project_id=None, retry=None, timeout=None, metadata=None
+            trigger_id=TRIGGER_ID, project_id=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_get_build(self, mock_hook):
         mock_hook.return_value.get_build.return_value = Build()
         operator = CloudBuildGetBuildOperator(id_=BUILD_ID, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.get_build.assert_called_once_with(
-            id_=BUILD_ID, project_id=None, retry=None, timeout=None, metadata=None
+            id_=BUILD_ID, project_id=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_get_build_trigger(self, mock_hook):
         mock_hook.return_value.get_build_trigger.return_value = BuildTrigger()
         operator = CloudBuildGetBuildTriggerOperator(trigger_id=TRIGGER_ID, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.get_build_trigger.assert_called_once_with(
-            trigger_id=TRIGGER_ID, project_id=None, retry=None, timeout=None, metadata=None
+            trigger_id=TRIGGER_ID, project_id=None, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_list_build_triggers(self, mock_hook):
         mock_hook.return_value.list_build_triggers.return_value = mock.MagicMock()
         operator = CloudBuildListBuildTriggersOperator(task_id="id", location="global")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.list_build_triggers.assert_called_once_with(
             project_id=None,
             location="global",
             page_size=None,
             page_token=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_list_builds(self, mock_hook):
         mock_hook.return_value.list_builds.return_value = mock.MagicMock()
         operator = CloudBuildListBuildsOperator(task_id="id", location="global")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.list_builds.assert_called_once_with(
             project_id=None,
             location="global",
             page_size=None,
             filter_=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_retry_build(self, mock_hook):
         mock_hook.return_value.retry_build.return_value = Build()
         operator = CloudBuildRetryBuildOperator(id_=BUILD_ID, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.retry_build.assert_called_once_with(
-            id_=BUILD_ID, project_id=None, wait=True, retry=None, timeout=None, metadata=None
+            id_=BUILD_ID, project_id=None, wait=True, retry=DEFAULT, timeout=None, metadata=()
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
     def test_run_build_trigger(self, mock_hook):
         mock_hook.return_value.run_build_trigger.return_value = Build()
         operator = CloudBuildRunBuildTriggerOperator(trigger_id=TRIGGER_ID, source=REPO_SOURCE, task_id="id")
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.run_build_trigger.assert_called_once_with(
             trigger_id=TRIGGER_ID,
             source=REPO_SOURCE,
             project_id=None,
             wait=True,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
     @mock.patch("airflow.providers.google.cloud.operators.cloud_build.CloudBuildHook")
@@ -235,15 +237,16 @@ class TestCloudBuildOperator(TestCase):
         operator = CloudBuildUpdateBuildTriggerOperator(
             trigger_id=TRIGGER_ID, trigger=BUILD_TRIGGER, task_id="id"
         )
-        operator.execute(context=None)
+        context = mock.MagicMock()
+        operator.execute(context=context)
         mock_hook.assert_called_once_with(gcp_conn_id=GCP_CONN_ID, impersonation_chain=None)
         mock_hook.return_value.update_build_trigger.assert_called_once_with(
             trigger_id=TRIGGER_ID,
             trigger=BUILD_TRIGGER,
             project_id=None,
-            retry=None,
+            retry=DEFAULT,
             timeout=None,
-            metadata=None,
+            metadata=(),
         )
 
 

@@ -15,11 +15,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import os
 import tempfile
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
-from typing import List, Optional, Sequence
+from typing import Sequence
 from unittest import mock
 
 import pytest
@@ -56,7 +58,6 @@ def resolve_full_gcp_key_path(key: str) -> str:
     Returns path full path to provided GCP key.
 
     :param key: Name of the GCP key, for example ``my_service.json``
-    :type key: str
     :returns: Full path to the key
     """
     path = os.environ.get("CREDENTIALS_DIR", "/files/airflow-breeze-config/keys")
@@ -66,9 +67,9 @@ def resolve_full_gcp_key_path(key: str) -> str:
 
 @contextmanager
 def provide_gcp_context(
-    key_file_path: Optional[str] = None,
-    scopes: Optional[Sequence] = None,
-    project_id: Optional[str] = None,
+    key_file_path: str | None = None,
+    scopes: Sequence | None = None,
+    project_id: str | None = None,
 ):
     """
     Context manager that provides:
@@ -82,12 +83,9 @@ def provide_gcp_context(
     as ``key_file_path``.
 
     :param key_file_path: Path to file with GCP credentials .json file.
-    :type key_file_path: str
     :param scopes: OAuth scopes for the connection
-    :type scopes: Sequence
     :param project_id: The id of GCP project for the connection.
         Default: ``os.environ["GCP_PROJECT_ID"]`` or None
-    :type project_id: str
     """
     key_file_path = resolve_full_gcp_key_path(key_file_path)  # type: ignore
     if project_id is None:
@@ -95,7 +93,7 @@ def provide_gcp_context(
     with provide_gcp_conn_and_credentials(
         key_file_path, scopes, project_id
     ), tempfile.TemporaryDirectory() as gcloud_config_tmp, mock.patch.dict(
-        'os.environ', {CLOUD_SDK_CONFIG_DIR: gcloud_config_tmp}
+        "os.environ", {CLOUD_SDK_CONFIG_DIR: gcloud_config_tmp}
     ):
         executor = CommandExecutor()
 
@@ -138,7 +136,7 @@ class GoogleSystemTest(SystemTest):
 
     @classmethod
     def execute_with_ctx(
-        cls, cmd: List[str], key: str = GCP_GCS_KEY, project_id=None, scopes=None, silent: bool = False
+        cls, cmd: list[str], key: str = GCP_GCS_KEY, project_id=None, scopes=None, silent: bool = False
     ):
         """
         Executes command with context created by provide_gcp_context and activated
@@ -149,7 +147,7 @@ class GoogleSystemTest(SystemTest):
             cls.execute_cmd(cmd=cmd, silent=silent)
 
     @classmethod
-    def create_gcs_bucket(cls, name: str, location: Optional[str] = None) -> None:
+    def create_gcs_bucket(cls, name: str, location: str | None = None) -> None:
         bucket_name = f"gs://{name}" if not name.startswith("gs://") else name
         cmd = ["gsutil", "mb"]
         if location:
@@ -183,7 +181,7 @@ class GoogleSystemTest(SystemTest):
 
     @classmethod
     def get_project_number(cls, project_id: str) -> str:
-        cmd = ['gcloud', 'projects', 'describe', project_id, '--format', 'value(projectNumber)']
+        cmd = ["gcloud", "projects", "describe", project_id, "--format", "value(projectNumber)"]
         return cls.check_output(cmd).decode("utf-8").strip()
 
     @classmethod

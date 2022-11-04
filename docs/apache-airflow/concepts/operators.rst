@@ -31,6 +31,11 @@ Airflow has a very extensive set of operators available, with some built-in to t
 - :class:`~airflow.operators.bash.BashOperator` - executes a bash command
 - :class:`~airflow.operators.python.PythonOperator` - calls an arbitrary Python function
 - :class:`~airflow.operators.email.EmailOperator` - sends an email
+- Use the ``@task`` decorator to execute an arbitrary Python function. It doesn't support rendering jinja templates passed as arguments.
+
+.. note::
+    The ``@task`` decorator is recommended over the classic :class:`~airflow.operators.python.PythonOperator`
+    to execute Python callables with no template rendering in its arguments.
 
 For a list of all core operators, see: :doc:`Core Operators and Hooks Reference </operators-and-hooks-ref>`.
 
@@ -44,7 +49,7 @@ If the operator you need isn't installed with Airflow by default, you can probab
 - :class:`~airflow.providers.jdbc.operators.jdbc.JdbcOperator`
 - :class:`~airflow.providers.docker.operators.docker.DockerOperator`
 - :class:`~airflow.providers.apache.hive.operators.hive.HiveOperator`
-- :class:`~airflow.providers.amazon.aws.operators.s3_file_transform.S3FileTransformOperator`
+- :class:`~airflow.providers.amazon.aws.operators.s3.S3FileTransformOperator`
 - :class:`~airflow.providers.mysql.transfers.presto_to_mysql.PrestoToMySqlOperator`
 - :class:`~airflow.providers.slack.operators.slack.SlackAPIOperator`
 
@@ -88,7 +93,7 @@ You can also use Jinja templating with nested fields, as long as these nested fi
 .. code-block:: python
 
     class MyDataReader:
-        template_fields = ["path"]
+        template_fields: Sequence[str] = ("path",)
 
         def __init__(self, my_path):
             self.path = my_path
@@ -103,6 +108,7 @@ You can also use Jinja templating with nested fields, as long as these nested fi
         dag=dag,
     )
 
+
 .. note:: The ``template_fields`` property can equally be a class variable or an instance variable.
 
 Deep nested fields can also be substituted, as long as all intermediate fields are marked as template fields:
@@ -110,7 +116,7 @@ Deep nested fields can also be substituted, as long as all intermediate fields a
 .. code-block:: python
 
     class MyDataTransformer:
-        template_fields = ["reader"]
+        template_fields: Sequence[str] = ("reader",)
 
         def __init__(self, my_reader):
             self.reader = my_reader
@@ -119,7 +125,7 @@ Deep nested fields can also be substituted, as long as all intermediate fields a
 
 
     class MyDataReader:
-        template_fields = ["path"]
+        template_fields: Sequence[str] = ("path",)
 
         def __init__(self, my_path):
             self.path = my_path
@@ -134,6 +140,7 @@ Deep nested fields can also be substituted, as long as all intermediate fields a
         dag=dag,
     )
 
+
 You can pass custom options to the Jinja ``Environment`` when creating your DAG. One common usage is to avoid Jinja from dropping a trailing newline from a template string:
 
 .. code-block:: python
@@ -147,6 +154,8 @@ You can pass custom options to the Jinja ``Environment`` when creating your DAG.
     )
 
 See the `Jinja documentation <https://jinja.palletsprojects.com/en/2.11.x/api/#jinja2.Environment>`_ to find all available options.
+
+.. _concepts:templating-native-objects:
 
 Rendering Fields as Native Python Objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -166,7 +175,6 @@ Now, when the following task is run, ``order_data`` argument is passed a string,
         python_callable=transform,
     )
 
-
 If you instead want the rendered template field to return a Native Python object (``dict`` in our example),
 you can pass ``render_template_as_native_obj=True`` to the DAG as follows:
 
@@ -174,18 +182,20 @@ you can pass ``render_template_as_native_obj=True`` to the DAG as follows:
 
     dag = DAG(
         dag_id="example_template_as_python_object",
-        schedule_interval=None,
-        start_date=datetime(2021, 1, 1),
+        schedule=None,
+        start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
         catchup=False,
         render_template_as_native_obj=True,
     )
 
 
+    @task(task_id="extract")
     def extract():
         data_string = '{"1001": 301.27, "1002": 433.21, "1003": 502.22}'
         return json.loads(data_string)
 
 
+    @task(task_id="transform")
     def transform(order_data):
         print(type(order_data))
         for value in order_data.values():
@@ -193,7 +203,7 @@ you can pass ``render_template_as_native_obj=True`` to the DAG as follows:
         return {"total_order_value": total_order_value}
 
 
-    extract_task = PythonOperator(task_id="extract", python_callable=extract)
+    extract_task = extract()
 
     transform_task = PythonOperator(
         task_id="transform",
@@ -208,3 +218,17 @@ In this case, ``order_data`` argument is passed: ``{"1001": 301.27, "1002": 433.
 Airflow uses Jinja's `NativeEnvironment <https://jinja.palletsprojects.com/en/2.11.x/nativetypes/>`_
 when ``render_template_as_native_obj`` is set to ``True``.
 With ``NativeEnvironment``, rendering a template produces a native Python type.
+
+.. _concepts:reserved-keywords:
+
+Reserved params keyword
+-----------------------
+
+In Apache Airflow 2.2.0 ``params`` variable is used during DAG serialization. Please do not use that name in third party operators.
+If you upgrade your environment and get the following error:
+
+.. code-block::
+
+    AttributeError: 'str' object has no attribute '__module__'
+
+change name from ``params`` in your operators.

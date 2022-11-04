@@ -15,36 +15,34 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, List, Union
+from __future__ import annotations
 
-from airflow.models import BaseOperator
-from airflow.providers.vertica.hooks.vertica import VerticaHook
+import warnings
+from typing import Any, Sequence
+
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
 
-class VerticaOperator(BaseOperator):
+class VerticaOperator(SQLExecuteQueryOperator):
     """
     Executes sql code in a specific Vertica database.
 
     :param vertica_conn_id: reference to a specific Vertica database
-    :type vertica_conn_id: str
-    :param sql: the sql code to be executed. (templated)
-    :type sql: Can receive a str representing a sql statement,
-        a list of str (sql statements), or reference to a template file.
-        Template reference are recognized by str ending in '.sql'
+    :param sql: the SQL code to be executed as a single string, or
+        a list of str (sql statements), or a reference to a template file.
+        Template references are recognized by str ending in '.sql'
     """
 
-    template_fields = ('sql',)
-    template_ext = ('.sql',)
-    ui_color = '#b4e0ff'
+    template_fields: Sequence[str] = ("sql",)
+    template_ext: Sequence[str] = (".sql",)
+    template_fields_renderers = {"sql": "sql"}
+    ui_color = "#b4e0ff"
 
-    def __init__(
-        self, *, sql: Union[str, List[str]], vertica_conn_id: str = 'vertica_default', **kwargs: Any
-    ) -> None:
-        super().__init__(**kwargs)
-        self.vertica_conn_id = vertica_conn_id
-        self.sql = sql
-
-    def execute(self, context: Dict[Any, Any]) -> None:
-        self.log.info('Executing: %s', self.sql)
-        hook = VerticaHook(vertica_conn_id=self.vertica_conn_id)
-        hook.run(sql=self.sql)
+    def __init__(self, *, vertica_conn_id: str = "vertica_default", **kwargs: Any) -> None:
+        super().__init__(conn_id=vertica_conn_id, **kwargs)
+        warnings.warn(
+            """This class is deprecated.
+            Please use `airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator`.""",
+            DeprecationWarning,
+            stacklevel=2,
+        )

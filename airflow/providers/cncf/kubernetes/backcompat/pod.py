@@ -14,39 +14,49 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Classes for interacting with Kubernetes API"""
+"""
+Classes for interacting with Kubernetes API.
+
+This module is deprecated. Please use :mod:`kubernetes.client.models.V1ResourceRequirements`
+and :mod:`kubernetes.client.models.V1ContainerPort`.
+"""
+from __future__ import annotations
+
+import warnings
 
 from kubernetes.client import models as k8s
 
+warnings.warn(
+    (
+        "This module is deprecated. Please use `kubernetes.client.models.V1ResourceRequirements`"
+        " and `kubernetes.client.models.V1ContainerPort`."
+    ),
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 class Resources:
-    """backwards compat for Resources"""
+    """backwards compat for Resources."""
 
     __slots__ = (
-        'request_memory',
-        'request_cpu',
-        'limit_memory',
-        'limit_cpu',
-        'limit_gpu',
-        'request_ephemeral_storage',
-        'limit_ephemeral_storage',
+        "request_memory",
+        "request_cpu",
+        "limit_memory",
+        "limit_cpu",
+        "limit_gpu",
+        "request_ephemeral_storage",
+        "limit_ephemeral_storage",
     )
 
     """
     :param request_memory: requested memory
-    :type request_memory: str
     :param request_cpu: requested CPU number
-    :type request_cpu: float | str
     :param request_ephemeral_storage: requested ephemeral storage
-    :type request_ephemeral_storage: str
     :param limit_memory: limit for memory usage
-    :type limit_memory: str
     :param limit_cpu: Limit for CPU used
-    :type limit_cpu: float | str
     :param limit_gpu: Limits for GPU used
-    :type limit_gpu: int
     :param limit_ephemeral_storage: Limit for ephemeral storage
-    :type limit_ephemeral_storage: float | str
     """
 
     def __init__(
@@ -74,15 +84,15 @@ class Resources:
         @rtype: object
         """
         limits_raw = {
-            'cpu': self.limit_cpu,
-            'memory': self.limit_memory,
-            'nvidia.com/gpu': self.limit_gpu,
-            'ephemeral-storage': self.limit_ephemeral_storage,
+            "cpu": self.limit_cpu,
+            "memory": self.limit_memory,
+            "nvidia.com/gpu": self.limit_gpu,
+            "ephemeral-storage": self.limit_ephemeral_storage,
         }
         requests_raw = {
-            'cpu': self.request_cpu,
-            'memory': self.request_memory,
-            'ephemeral-storage': self.request_ephemeral_storage,
+            "cpu": self.request_cpu,
+            "memory": self.request_memory,
+            "ephemeral-storage": self.request_ephemeral_storage,
         }
 
         limits = {k: v for k, v in limits_raw.items() if v}
@@ -94,7 +104,7 @@ class Resources:
 class Port:
     """POD port"""
 
-    __slots__ = ('name', 'container_port')
+    __slots__ = ("name", "container_port")
 
     def __init__(self, name=None, container_port=None):
         """Creates port"""
@@ -102,9 +112,5 @@ class Port:
         self.container_port = container_port
 
     def to_k8s_client_obj(self):
-        """
-        Converts to k8s object.
-
-        :rtype: object
-        """
+        """Converts to k8s object."""
         return k8s.V1ContainerPort(name=self.name, container_port=self.container_port)

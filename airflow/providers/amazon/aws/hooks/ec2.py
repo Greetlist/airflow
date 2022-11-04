@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
 
 import functools
 import time
@@ -30,16 +30,17 @@ def only_client_type(func):
         if self._api_type == "client_type":
             return func(self, *args, **kwargs)
 
+        ec2_doc_link = "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html"
         raise AirflowException(
-            """
+            f"""
             This method is only callable when using client_type API for interacting with EC2.
             Create the EC2Hook object as follows to use this method
 
             ec2 = EC2Hook(api_type="client_type")
 
             Read following for details on client_type and resource_type APIs:
-            1. https://boto3.amazonaws.com/v1/documentation/api/1.9.42/reference/services/ec2.html#client
-            2. https://boto3.amazonaws.com/v1/documentation/api/1.9.42/reference/services/ec2.html#service-resource # noqa
+            1. {ec2_doc_link}#client
+            2. {ec2_doc_link}#service-resource
             """
         )
 
@@ -69,16 +70,13 @@ class EC2Hook(AwsBaseHook):
 
         super().__init__(*args, **kwargs)
 
-    def get_instance(self, instance_id: str, filters: list = None):
+    def get_instance(self, instance_id: str, filters: list | None = None):
         """
         Get EC2 instance by id and return it.
 
         :param instance_id: id of the AWS EC2 instance
-        :type instance_id: str
         :param filters: List of filters to specify instances to get
-        :type filters: list
         :return: Instance object
-        :rtype: ec2.Instance
         """
         if self._api_type == "client_type":
             return self.get_instances(filters=filters, instance_ids=[instance_id])
@@ -122,7 +120,7 @@ class EC2Hook(AwsBaseHook):
         return self.conn.terminate_instances(InstanceIds=instance_ids)
 
     @only_client_type
-    def describe_instances(self, filters: list = None, instance_ids: list = None):
+    def describe_instances(self, filters: list | None = None, instance_ids: list | None = None):
         """
         Describe EC2 instances, optionally applying filters and selective instance ids
 
@@ -139,7 +137,7 @@ class EC2Hook(AwsBaseHook):
         return self.conn.describe_instances(Filters=filters, InstanceIds=instance_ids)
 
     @only_client_type
-    def get_instances(self, filters: list = None, instance_ids: list = None) -> list:
+    def get_instances(self, filters: list | None = None, instance_ids: list | None = None) -> list:
         """
         Get list of instance details, optionally applying filters and selective instance ids
 
@@ -154,7 +152,7 @@ class EC2Hook(AwsBaseHook):
         ]
 
     @only_client_type
-    def get_instance_ids(self, filters: list = None) -> list:
+    def get_instance_ids(self, filters: list | None = None) -> list:
         """
         Get list of instance ids, optionally applying filters to fetch selective instances
 
@@ -168,9 +166,7 @@ class EC2Hook(AwsBaseHook):
         Get EC2 instance state by id and return it.
 
         :param instance_id: id of the AWS EC2 instance
-        :type instance_id: str
         :return: current state of the instance
-        :rtype: str
         """
         if self._api_type == "client_type":
             return self.get_instances(instance_ids=[instance_id])[0]["State"]["Name"]
@@ -182,14 +178,10 @@ class EC2Hook(AwsBaseHook):
         Wait EC2 instance until its state is equal to the target_state.
 
         :param instance_id: id of the AWS EC2 instance
-        :type instance_id: str
         :param target_state: target state of instance
-        :type target_state: str
         :param check_interval: time in seconds that the job should wait in
             between each instance state checks until operation is completed
-        :type check_interval: float
         :return: None
-        :rtype: None
         """
         instance_state = self.get_instance_state(instance_id=instance_id)
 

@@ -36,16 +36,19 @@ following steps:
     .. code-block:: python
 
       STATE_COLORS = {
-          "queued": "darkgray",
-          "running": "#01FF70",
-          "success": "#2ECC40",
-          "failed": "firebrick",
-          "up_for_retry": "yellow",
-          "up_for_reschedule": "turquoise",
-          "upstream_failed": "orange",
-          "skipped": "darkorchid",
-          "scheduled": "tan",
           "deferred": "mediumpurple",
+          "failed": "firebrick",
+          "queued": "darkgray",
+          "removed": "lightgrey",
+          "restarting": "violet",
+          "running": "#01FF70",
+          "scheduled": "tan",
+          "shutdown": "blue",
+          "skipped": "darkorchid",
+          "success": "#2ECC40",
+          "up_for_reschedule": "turquoise",
+          "up_for_retry": "yellow",
+          "upstream_failed": "orange",
       }
 
 
@@ -84,7 +87,9 @@ Customizing DAG UI Header and Airflow Page Titles
 Airflow now allows you to customize the DAG home page header and page title. This will help
 distinguish between various installations of Airflow or simply amend the page text.
 
-Note: the custom title will be applied to both the page header and the page title.
+.. note::
+
+    The custom title will be applied to both the page header and the page title.
 
 To make this change, simply:
 
@@ -116,6 +121,10 @@ After
 """""
 
 .. image:: ../img/change-site-title/example_instance_name_configuration.png
+
+.. note::
+
+    From version 2.3.0 you can include markup in ``instance_name`` variable for further customization. To enable, set ``instance_name_has_markup`` under the ``[webserver]`` section inside ``airflow.cfg`` to ``True``.
 
 
 Add custom alert messages on the dashboard
@@ -160,8 +169,6 @@ information, see `String Formatting in the MarkupSafe docs <https://markupsafe.p
     .. code-block:: python
 
       DASHBOARD_UIALERTS = [
-          UIAlert(
-              'Visit <a href="https://airflow.apache.org">airflow.apache.org</a>', html=True
-          ),
+          UIAlert('Visit <a href="https://airflow.apache.org">airflow.apache.org</a>', html=True),
           UIAlert(Markup("Welcome <em>%s</em>") % ("John & Jane Doe",)),
       ]

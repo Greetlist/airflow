@@ -15,11 +15,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Callable, Dict, Optional, Union
+from __future__ import annotations
+
+from typing import Any, Callable
 
 import requests
 import tenacity
 from requests.auth import HTTPBasicAuth
+from requests_toolbelt.adapters.socket_options import TCPKeepAliveAdapter
 
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
@@ -30,25 +33,31 @@ class HttpHook(BaseHook):
     Interact with HTTP servers.
 
     :param method: the API method to be called
-    :type method: str
     :param http_conn_id: :ref:`http connection<howto/connection:http>` that has the base
         API url i.e https://www.google.com/ and optional authentication credentials. Default
         headers can also be specified in the Extra field in json format.
-    :type http_conn_id: str
     :param auth_type: The auth type for the service
-    :type auth_type: AuthBase of python requests lib
+    :param tcp_keep_alive: Enable TCP Keep Alive for the connection.
+    :param tcp_keep_alive_idle: The TCP Keep Alive Idle parameter (corresponds to ``socket.TCP_KEEPIDLE``).
+    :param tcp_keep_alive_count: The TCP Keep Alive count parameter (corresponds to ``socket.TCP_KEEPCNT``)
+    :param tcp_keep_alive_interval: The TCP Keep Alive interval parameter (corresponds to
+        ``socket.TCP_KEEPINTVL``)
     """
 
-    conn_name_attr = 'http_conn_id'
-    default_conn_name = 'http_default'
-    conn_type = 'http'
-    hook_name = 'HTTP'
+    conn_name_attr = "http_conn_id"
+    default_conn_name = "http_default"
+    conn_type = "http"
+    hook_name = "HTTP"
 
     def __init__(
         self,
-        method: str = 'POST',
+        method: str = "POST",
         http_conn_id: str = default_conn_name,
         auth_type: Any = HTTPBasicAuth,
+        tcp_keep_alive: bool = True,
+        tcp_keep_alive_idle: int = 120,
+        tcp_keep_alive_count: int = 20,
+        tcp_keep_alive_interval: int = 30,
     ) -> None:
         super().__init__()
         self.http_conn_id = http_conn_id
@@ -56,15 +65,18 @@ class HttpHook(BaseHook):
         self.base_url: str = ""
         self._retry_obj: Callable[..., Any]
         self.auth_type: Any = auth_type
+        self.tcp_keep_alive = tcp_keep_alive
+        self.keep_alive_idle = tcp_keep_alive_idle
+        self.keep_alive_count = tcp_keep_alive_count
+        self.keep_alive_interval = tcp_keep_alive_interval
 
     # headers may be passed through directly or in the "extra" field in the connection
     # definition
-    def get_conn(self, headers: Optional[Dict[Any, Any]] = None) -> requests.Session:
+    def get_conn(self, headers: dict[Any, Any] | None = None) -> requests.Session:
         """
         Returns http session for use with requests
 
         :param headers: additional headers to be passed through as a dictionary
-        :type headers: dict
         """
         session = requests.Session()
 
@@ -87,7 +99,7 @@ class HttpHook(BaseHook):
                 try:
                     session.headers.update(conn.extra_dejson)
                 except TypeError:
-                    self.log.warning('Connection to %s has invalid extra field.', conn.host)
+                    self.log.warning("Connection to %s has invalid extra field.", conn.host)
         if headers:
             session.headers.update(headers)
 
@@ -95,25 +107,21 @@ class HttpHook(BaseHook):
 
     def run(
         self,
-        endpoint: Optional[str] = None,
-        data: Optional[Union[Dict[str, Any], str]] = None,
-        headers: Optional[Dict[str, Any]] = None,
-        extra_options: Optional[Dict[str, Any]] = None,
+        endpoint: str | None = None,
+        data: dict[str, Any] | str | None = None,
+        headers: dict[str, Any] | None = None,
+        extra_options: dict[str, Any] | None = None,
         **request_kwargs: Any,
     ) -> Any:
         r"""
         Performs the request
 
         :param endpoint: the endpoint to be called i.e. resource/v1/query?
-        :type endpoint: str
         :param data: payload to be uploaded or request parameters
-        :type data: dict
         :param headers: additional headers to be passed through as a dictionary
-        :type headers: dict
         :param extra_options: additional options to be used when executing the request
             i.e. {'check_response': False} to avoid checking raising exceptions on non
             2XX or 3XX status codes
-        :type extra_options: dict
         :param request_kwargs: Additional kwargs to pass when creating a request.
             For example, ``run(json=obj)`` is passed as ``requests.Request(json=obj)``
         """
@@ -121,15 +129,17 @@ class HttpHook(BaseHook):
 
         session = self.get_conn(headers)
 
-        if self.base_url and not self.base_url.endswith('/') and endpoint and not endpoint.startswith('/'):
-            url = self.base_url + '/' + endpoint
-        else:
-            url = (self.base_url or '') + (endpoint or '')
+        url = self.url_from_endpoint(endpoint)
 
-        if self.method == 'GET':
+        if self.tcp_keep_alive:
+            keep_alive_adapter = TCPKeepAliveAdapter(
+                idle=self.keep_alive_idle, count=self.keep_alive_count, interval=self.keep_alive_interval
+            )
+            session.mount(url, keep_alive_adapter)
+        if self.method == "GET":
             # GET uses params
             req = requests.Request(self.method, url, params=data, headers=headers, **request_kwargs)
-        elif self.method == 'HEAD':
+        elif self.method == "HEAD":
             # HEAD doesn't use params
             req = requests.Request(self.method, url, headers=headers, **request_kwargs)
         else:
@@ -146,7 +156,6 @@ class HttpHook(BaseHook):
         status codes
 
         :param response: A requests response object
-        :type response: requests.response
         """
         try:
             response.raise_for_status()
@@ -159,20 +168,17 @@ class HttpHook(BaseHook):
         self,
         session: requests.Session,
         prepped_request: requests.PreparedRequest,
-        extra_options: Dict[Any, Any],
+        extra_options: dict[Any, Any],
     ) -> Any:
         """
         Grabs extra options like timeout and actually runs the request,
         checking for the result
 
         :param session: the session to be used to execute the request
-        :type session: requests.Session
         :param prepped_request: the prepared request generated in run()
-        :type prepped_request: session.prepare_request
         :param extra_options: additional options to be used when executing the request
             i.e. ``{'check_response': False}`` to avoid checking raising exceptions on non 2XX
             or 3XX status codes
-        :type extra_options: dict
         """
         extra_options = extra_options or {}
 
@@ -185,7 +191,7 @@ class HttpHook(BaseHook):
         )
 
         # Send the request.
-        send_kwargs = {
+        send_kwargs: dict[str, Any] = {
             "timeout": extra_options.get("timeout"),
             "allow_redirects": extra_options.get("allow_redirects", True),
         }
@@ -194,15 +200,15 @@ class HttpHook(BaseHook):
         try:
             response = session.send(prepped_request, **send_kwargs)
 
-            if extra_options.get('check_response', True):
+            if extra_options.get("check_response", True):
                 self.check_response(response)
             return response
 
         except requests.exceptions.ConnectionError as ex:
-            self.log.warning('%s Tenacity will retry to execute the operation', ex)
+            self.log.warning("%s Tenacity will retry to execute the operation", ex)
             raise ex
 
-    def run_with_advanced_retry(self, _retry_args: Dict[Any, Any], *args: Any, **kwargs: Any) -> Any:
+    def run_with_advanced_retry(self, _retry_args: dict[Any, Any], *args: Any, **kwargs: Any) -> Any:
         """
         Runs Hook.run() with a Tenacity decorator attached to it. This is useful for
         connectors which might be disturbed by intermittent issues and should not
@@ -210,7 +216,6 @@ class HttpHook(BaseHook):
 
         :param _retry_args: Arguments which define the retry behaviour.
             See Tenacity documentation at https://github.com/jd/tenacity
-        :type _retry_args: dict
 
 
         .. code-block:: python
@@ -219,7 +224,7 @@ class HttpHook(BaseHook):
             retry_args = dict(
                 wait=tenacity.wait_exponential(),
                 stop=tenacity.stop_after_attempt(10),
-                retry=requests.exceptions.ConnectionError,
+                retry=tenacity.retry_if_exception_type(Exception),
             )
             hook.run_with_advanced_retry(endpoint="v1/test", _retry_args=retry_args)
 
@@ -228,10 +233,16 @@ class HttpHook(BaseHook):
 
         return self._retry_obj(self.run, *args, **kwargs)
 
+    def url_from_endpoint(self, endpoint: str | None) -> str:
+        """Combine base url with endpoint"""
+        if self.base_url and not self.base_url.endswith("/") and endpoint and not endpoint.startswith("/"):
+            return self.base_url + "/" + endpoint
+        return (self.base_url or "") + (endpoint or "")
+
     def test_connection(self):
         """Test HTTP Connection"""
         try:
             self.run()
-            return True, 'Connection successfully tested'
+            return True, "Connection successfully tested"
         except Exception as e:
             return False, str(e)

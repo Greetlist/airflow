@@ -16,7 +16,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
+from __future__ import annotations
+
 #
 # This scripts re-tags images from one branch to another. Since we keep
 # images "per-branch" we sometimes need to "clone" the current
@@ -27,21 +28,17 @@
 # * when renaming a branch
 #
 import subprocess
-from typing import List
 
-import click
+import rich_click as click
 
-PYTHON_VERSIONS = ["3.6", "3.7", "3.8", "3.9"]
+PYTHON_VERSIONS = ["3.7", "3.8", "3.9", "3.10"]
 
 GHCR_IO_PREFIX = "ghcr.io"
 
 
 GHCR_IO_IMAGES = [
-    "{prefix}/{repo}/{branch}/ci-manifest/python{python_version}:latest",
-    "{prefix}/{repo}/{branch}/ci/python{python_version}:latest",
-    "{prefix}/{repo}/{branch}/prod-build/python{python_version}:latest",
-    "{prefix}/{repo}/{branch}/prod/python{python_version}:latest",
-    "{prefix}/{repo}/{branch}/python:{python_version}-slim-buster",
+    "{prefix}/{repo}/{branch}/ci/python{python}:latest",
+    "{prefix}/{repo}/{branch}/prod/python{python}:latest",
 ]
 
 
@@ -49,24 +46,25 @@ GHCR_IO_IMAGES = [
 def pull_push_all_images(
     source_prefix: str,
     target_prefix: str,
-    images: List[str],
+    images: list[str],
     source_branch: str,
     source_repo: str,
     target_branch: str,
     target_repo: str,
 ):
-    for python_version in PYTHON_VERSIONS:
+    for python in PYTHON_VERSIONS:
         for image in images:
             source_image = image.format(
-                prefix=source_prefix, branch=source_branch, repo=source_repo, python_version=python_version
+                prefix=source_prefix, branch=source_branch, repo=source_repo, python=python
             )
             target_image = image.format(
-                prefix=target_prefix, branch=target_branch, repo=target_repo, python_version=python_version
+                prefix=target_prefix, branch=target_branch, repo=target_repo, python=python
             )
             print(f"Copying image: {source_image} -> {target_image}")
-            subprocess.run(["docker", "pull", source_image], check=True)
-            subprocess.run(["docker", "tag", source_image, target_image], check=True)
-            subprocess.run(["docker", "push", target_image], check=True)
+            subprocess.run(
+                ["regctl", "image", "copy", "--force-recursive", "--digest-tags", source_image, target_image],
+                check=True,
+            )
 
 
 @click.group(invoke_without_command=True)

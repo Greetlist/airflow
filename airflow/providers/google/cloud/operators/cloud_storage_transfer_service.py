@@ -15,11 +15,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-#
 """This module contains Google Cloud Transfer operators."""
+from __future__ import annotations
+
 from copy import deepcopy
 from datetime import date, time
-from typing import Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
@@ -54,13 +55,21 @@ from airflow.providers.google.cloud.hooks.cloud_storage_transfer_service import 
     CloudDataTransferServiceHook,
     GcpTransferJobsStatus,
 )
+from airflow.providers.google.cloud.links.cloud_storage_transfer import (
+    CloudStorageTransferDetailsLink,
+    CloudStorageTransferJobLink,
+    CloudStorageTransferListLink,
+)
 from airflow.providers.google.cloud.utils.helpers import normalize_directory_path
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class TransferJobPreprocessor:
     """Helper class for preprocess of transfer job body."""
 
-    def __init__(self, body: dict, aws_conn_id: str = 'aws_default', default_schedule: bool = False) -> None:
+    def __init__(self, body: dict, aws_conn_id: str = "aws_default", default_schedule: bool = False) -> None:
         self.body = body
         self.aws_conn_id = aws_conn_id
         self.default_schedule = default_schedule
@@ -106,7 +115,6 @@ class TransferJobPreprocessor:
         reformats schedule information.
 
         :return: Preprocessed body
-        :rtype: dict
         """
         self._inject_aws_credentials()
         self._reformat_schedule()
@@ -192,14 +200,10 @@ class CloudDataTransferServiceCreateJobOperator(BaseOperator):
         * credentials to Amazon Web Service should be stored in the connection and indicated by the
           aws_conn_id parameter
 
-    :type body: dict
     :param aws_conn_id: The connection ID used to retrieve credentials to
         Amazon Web Service.
-    :type aws_conn_id: str
     :param gcp_conn_id: The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -208,26 +212,27 @@ class CloudDataTransferServiceCreateJobOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_job_create_template_fields]
-    template_fields = (
-        'body',
-        'gcp_conn_id',
-        'aws_conn_id',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "body",
+        "gcp_conn_id",
+        "aws_conn_id",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_job_create_template_fields]
+    operator_extra_links = (CloudStorageTransferJobLink(),)
 
     def __init__(
         self,
         *,
         body: dict,
-        aws_conn_id: str = 'aws_default',
-        gcp_conn_id: str = 'google_cloud_default',
-        api_version: str = 'v1',
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        aws_conn_id: str = "aws_default",
+        gcp_conn_id: str = "google_cloud_default",
+        api_version: str = "v1",
+        project_id: str | None = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -235,20 +240,32 @@ class CloudDataTransferServiceCreateJobOperator(BaseOperator):
         self.aws_conn_id = aws_conn_id
         self.gcp_conn_id = gcp_conn_id
         self.api_version = api_version
+        self.project_id = project_id
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
     def _validate_inputs(self) -> None:
         TransferJobValidator(body=self.body).validate_body()
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         TransferJobPreprocessor(body=self.body, aws_conn_id=self.aws_conn_id).process_body()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.google_impersonation_chain,
         )
-        return hook.create_transfer_job(body=self.body)
+        result = hook.create_transfer_job(body=self.body)
+
+        project_id = self.project_id or hook.project_id
+        if project_id:
+            CloudStorageTransferJobLink.persist(
+                context=context,
+                task_instance=self,
+                project_id=project_id,
+                job_name=result[NAME],
+            )
+
+        return result
 
 
 class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
@@ -260,7 +277,6 @@ class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServiceUpdateJobOperator`
 
     :param job_name: (Required) Name of the job to be updated
-    :type job_name: str
     :param body: (Required) The request body, as described in
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs/patch#request-body
         With three additional improvements:
@@ -270,14 +286,10 @@ class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
         * credentials to Amazon Web Service should be stored in the connection and indicated by the
           aws_conn_id parameter
 
-    :type body: dict
     :param aws_conn_id: The connection ID used to retrieve credentials to
         Amazon Web Service.
-    :type aws_conn_id: str
     :param gcp_conn_id: The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -286,33 +298,35 @@ class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_job_update_template_fields]
-    template_fields = (
-        'job_name',
-        'body',
-        'gcp_conn_id',
-        'aws_conn_id',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "job_name",
+        "body",
+        "gcp_conn_id",
+        "aws_conn_id",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_job_update_template_fields]
+    operator_extra_links = (CloudStorageTransferJobLink(),)
 
     def __init__(
         self,
         *,
         job_name: str,
         body: dict,
-        aws_conn_id: str = 'aws_default',
-        gcp_conn_id: str = 'google_cloud_default',
-        api_version: str = 'v1',
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        aws_conn_id: str = "aws_default",
+        gcp_conn_id: str = "google_cloud_default",
+        api_version: str = "v1",
+        project_id: str | None = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.job_name = job_name
         self.body = body
+        self.project_id = project_id
         self.gcp_conn_id = gcp_conn_id
         self.api_version = api_version
         self.aws_conn_id = aws_conn_id
@@ -324,13 +338,23 @@ class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
         if not self.job_name:
             raise AirflowException("The required parameter 'job_name' is empty or None")
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         TransferJobPreprocessor(body=self.body, aws_conn_id=self.aws_conn_id).process_body()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.google_impersonation_chain,
         )
+
+        project_id = self.project_id or hook.project_id
+        if project_id:
+            CloudStorageTransferJobLink.persist(
+                context=context,
+                task_instance=self,
+                project_id=project_id,
+                job_name=self.job_name,
+            )
+
         return hook.update_transfer_job(job_name=self.job_name, body=self.body)
 
 
@@ -346,15 +370,11 @@ class CloudDataTransferServiceDeleteJobOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServiceDeleteJobOperator`
 
     :param job_name: (Required) Name of the TRANSFER operation
-    :type job_name: str
     :param project_id: (Optional) the ID of the project that owns the Transfer
         Job. If set to None or missing, the default project_id from the Google Cloud
         connection is used.
-    :type project_id: str
     :param gcp_conn_id: The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -363,16 +383,15 @@ class CloudDataTransferServiceDeleteJobOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_job_delete_template_fields]
-    template_fields = (
-        'job_name',
-        'project_id',
-        'gcp_conn_id',
-        'api_version',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "job_name",
+        "project_id",
+        "gcp_conn_id",
+        "api_version",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_job_delete_template_fields]
 
@@ -382,8 +401,8 @@ class CloudDataTransferServiceDeleteJobOperator(BaseOperator):
         job_name: str,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v1",
-        project_id: Optional[str] = None,
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        project_id: str | None = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -398,7 +417,7 @@ class CloudDataTransferServiceDeleteJobOperator(BaseOperator):
         if not self.job_name:
             raise AirflowException("The required parameter 'job_name' is empty or None")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         self._validate_inputs()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
@@ -418,12 +437,9 @@ class CloudDataTransferServiceGetOperationOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServiceGetOperationOperator`
 
     :param operation_name: (Required) Name of the transfer operation.
-    :type operation_name: str
     :param gcp_conn_id: The connection ID used to connect to Google
         Cloud Platform.
-    :type gcp_conn_id: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -432,28 +448,30 @@ class CloudDataTransferServiceGetOperationOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_operation_get_template_fields]
-    template_fields = (
-        'operation_name',
-        'gcp_conn_id',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "operation_name",
+        "gcp_conn_id",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_operation_get_template_fields]
+    operator_extra_links = (CloudStorageTransferDetailsLink(),)
 
     def __init__(
         self,
         *,
+        project_id: str | None = None,
         operation_name: str,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v1",
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.operation_name = operation_name
+        self.project_id = project_id
         self.gcp_conn_id = gcp_conn_id
         self.api_version = api_version
         self.google_impersonation_chain = google_impersonation_chain
@@ -463,13 +481,23 @@ class CloudDataTransferServiceGetOperationOperator(BaseOperator):
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context) -> dict:
+    def execute(self, context: Context) -> dict:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
             impersonation_chain=self.google_impersonation_chain,
         )
         operation = hook.get_transfer_operation(operation_name=self.operation_name)
+
+        project_id = self.project_id or hook.project_id
+        if project_id:
+            CloudStorageTransferDetailsLink.persist(
+                context=context,
+                task_instance=self,
+                project_id=project_id,
+                operation_name=self.operation_name,
+            )
+
         return operation
 
 
@@ -484,12 +512,9 @@ class CloudDataTransferServiceListOperationsOperator(BaseOperator):
 
     :param request_filter: (Required) A request filter, as described in
             https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs/list#body.QUERY_PARAMETERS.filter
-    :type request_filter: dict
     :param gcp_conn_id: The connection ID used to connect to Google
         Cloud Platform.
-    :type gcp_conn_id: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -498,36 +523,38 @@ class CloudDataTransferServiceListOperationsOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_operations_list_template_fields]
-    template_fields = (
-        'filter',
-        'gcp_conn_id',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "filter",
+        "gcp_conn_id",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_operations_list_template_fields]
+    operator_extra_links = (CloudStorageTransferListLink(),)
 
     def __init__(
         self,
-        request_filter: Optional[Dict] = None,
-        gcp_conn_id: str = 'google_cloud_default',
-        api_version: str = 'v1',
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        request_filter: dict | None = None,
+        project_id: str | None = None,
+        gcp_conn_id: str = "google_cloud_default",
+        api_version: str = "v1",
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         # To preserve backward compatibility
         # TODO: remove one day
         if request_filter is None:
-            if 'filter' in kwargs:
-                request_filter = kwargs['filter']
+            if "filter" in kwargs:
+                request_filter = kwargs["filter"]
                 DeprecationWarning("Use 'request_filter' instead 'filter' to pass the argument.")
             else:
                 TypeError("__init__() missing 1 required positional argument: 'request_filter'")
 
         super().__init__(**kwargs)
         self.filter = request_filter
+        self.project_id = project_id
         self.gcp_conn_id = gcp_conn_id
         self.api_version = api_version
         self.google_impersonation_chain = google_impersonation_chain
@@ -537,7 +564,7 @@ class CloudDataTransferServiceListOperationsOperator(BaseOperator):
         if not self.filter:
             raise AirflowException("The required parameter 'filter' is empty or None")
 
-    def execute(self, context) -> List[dict]:
+    def execute(self, context: Context) -> list[dict]:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -545,6 +572,15 @@ class CloudDataTransferServiceListOperationsOperator(BaseOperator):
         )
         operations_list = hook.list_transfer_operations(request_filter=self.filter)
         self.log.info(operations_list)
+
+        project_id = self.project_id or hook.project_id
+        if project_id:
+            CloudStorageTransferListLink.persist(
+                context=context,
+                task_instance=self,
+                project_id=project_id,
+            )
+
         return operations_list
 
 
@@ -557,11 +593,8 @@ class CloudDataTransferServicePauseOperationOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServicePauseOperationOperator`
 
     :param operation_name: (Required) Name of the transfer operation.
-    :type operation_name: str
     :param gcp_conn_id: The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
     :param api_version:  API version used (e.g. v1).
-    :type api_version: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -570,15 +603,14 @@ class CloudDataTransferServicePauseOperationOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_operation_pause_template_fields]
-    template_fields = (
-        'operation_name',
-        'gcp_conn_id',
-        'api_version',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "operation_name",
+        "gcp_conn_id",
+        "api_version",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_operation_pause_template_fields]
 
@@ -588,7 +620,7 @@ class CloudDataTransferServicePauseOperationOperator(BaseOperator):
         operation_name: str,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v1",
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -602,7 +634,7 @@ class CloudDataTransferServicePauseOperationOperator(BaseOperator):
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -620,11 +652,8 @@ class CloudDataTransferServiceResumeOperationOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServiceResumeOperationOperator`
 
     :param operation_name: (Required) Name of the transfer operation.
-    :type operation_name: str
     :param gcp_conn_id: The connection ID used to connect to Google Cloud.
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
-    :type gcp_conn_id: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -633,15 +662,14 @@ class CloudDataTransferServiceResumeOperationOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_operation_resume_template_fields]
-    template_fields = (
-        'operation_name',
-        'gcp_conn_id',
-        'api_version',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "operation_name",
+        "gcp_conn_id",
+        "api_version",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_operation_resume_template_fields]
 
@@ -651,7 +679,7 @@ class CloudDataTransferServiceResumeOperationOperator(BaseOperator):
         operation_name: str,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v1",
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         self.operation_name = operation_name
@@ -665,7 +693,7 @@ class CloudDataTransferServiceResumeOperationOperator(BaseOperator):
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -683,12 +711,9 @@ class CloudDataTransferServiceCancelOperationOperator(BaseOperator):
         :ref:`howto/operator:CloudDataTransferServiceCancelOperationOperator`
 
     :param operation_name: (Required) Name of the transfer operation.
-    :type operation_name: str
     :param api_version: API version used (e.g. v1).
-    :type api_version: str
     :param gcp_conn_id: The connection ID used to connect to Google
         Cloud Platform.
-    :type gcp_conn_id: str
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -697,15 +722,14 @@ class CloudDataTransferServiceCancelOperationOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     """
 
     # [START gcp_transfer_operation_cancel_template_fields]
-    template_fields = (
-        'operation_name',
-        'gcp_conn_id',
-        'api_version',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "operation_name",
+        "gcp_conn_id",
+        "api_version",
+        "google_impersonation_chain",
     )
     # [END gcp_transfer_operation_cancel_template_fields]
 
@@ -715,7 +739,7 @@ class CloudDataTransferServiceCancelOperationOperator(BaseOperator):
         operation_name: str,
         gcp_conn_id: str = "google_cloud_default",
         api_version: str = "v1",
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -729,7 +753,7 @@ class CloudDataTransferServiceCancelOperationOperator(BaseOperator):
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -761,27 +785,19 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
        )
 
     :param s3_bucket: The S3 bucket where to find the objects. (templated)
-    :type s3_bucket: str
     :param gcs_bucket: The destination Google Cloud Storage bucket
         where you want to store the files. (templated)
-    :type gcs_bucket: str
     :param s3_path: Optional root path where the source objects are. (templated)
-    :type s3_path: str
     :param gcs_path: Optional root path for transferred objects. (templated)
-    :type gcs_path: str
     :param project_id: Optional ID of the Google Cloud Console project that
         owns the job
-    :type project_id: str
     :param aws_conn_id: The source S3 connection
-    :type aws_conn_id: str
     :param gcp_conn_id: The destination connection ID to use
         when connecting to Google Cloud Storage.
-    :type gcp_conn_id: str
     :param delegate_to: Google account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
     :param description: Optional transfer service job description
-    :type description: str
     :param schedule: Optional transfer service schedule;
         If not set, run transfer job once as soon as the operator runs
         The format is described
@@ -791,18 +807,13 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         * dates they can be passed as :class:`datetime.date`
         * times they can be passed as :class:`datetime.time`
 
-    :type schedule: dict
     :param object_conditions: Optional transfer service object conditions; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec
-    :type object_conditions: dict
     :param transfer_options: Optional transfer service transfer options; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec
-    :type transfer_options: dict
     :param wait: Wait for transfer to finish. It must be set to True, if
         'delete_job_after_completion' is set to True.
-    :type wait: bool
     :param timeout: Time to wait for the operation to end in seconds. Defaults to 60 seconds if not specified.
-    :type timeout: Optional[Union[float, timedelta]]
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -811,42 +822,40 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     :param delete_job_after_completion: If True, delete the job after complete.
         If set to True, 'wait' must be set to True.
-    :type delete_job_after_completion: bool
     """
 
-    template_fields = (
-        'gcp_conn_id',
-        's3_bucket',
-        'gcs_bucket',
-        's3_path',
-        'gcs_path',
-        'description',
-        'object_conditions',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "gcp_conn_id",
+        "s3_bucket",
+        "gcs_bucket",
+        "s3_path",
+        "gcs_path",
+        "description",
+        "object_conditions",
+        "google_impersonation_chain",
     )
-    ui_color = '#e09411'
+    ui_color = "#e09411"
 
     def __init__(
         self,
         *,
         s3_bucket: str,
         gcs_bucket: str,
-        s3_path: Optional[str] = None,
-        gcs_path: Optional[str] = None,
-        project_id: Optional[str] = None,
-        aws_conn_id: str = 'aws_default',
-        gcp_conn_id: str = 'google_cloud_default',
-        delegate_to: Optional[str] = None,
-        description: Optional[str] = None,
-        schedule: Optional[Dict] = None,
-        object_conditions: Optional[Dict] = None,
-        transfer_options: Optional[Dict] = None,
+        s3_path: str | None = None,
+        gcs_path: str | None = None,
+        project_id: str | None = None,
+        aws_conn_id: str = "aws_default",
+        gcp_conn_id: str = "google_cloud_default",
+        delegate_to: str | None = None,
+        description: str | None = None,
+        schedule: dict | None = None,
+        object_conditions: dict | None = None,
+        transfer_options: dict | None = None,
         wait: bool = True,
-        timeout: Optional[float] = None,
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        timeout: float | None = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         delete_job_after_completion: bool = False,
         **kwargs,
     ) -> None:
@@ -874,7 +883,7 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         if self.delete_job_after_completion and not self.wait:
             raise AirflowException("If 'delete_job_after_completion' is True, then 'wait' must also be True.")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudDataTransferServiceHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -949,25 +958,18 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
 
     :param source_bucket: The source Google Cloud Storage bucket where the
          object is. (templated)
-    :type source_bucket: str
     :param destination_bucket: The destination Google Cloud Storage bucket
         where the object should be. (templated)
-    :type destination_bucket: str
     :param source_path: Optional root path where the source objects are. (templated)
-    :type source_path: str
     :param destination_path: Optional root path for transferred objects. (templated)
-    :type destination_path: str
     :param project_id: The ID of the Google Cloud Console project that
         owns the job
-    :type project_id: str
     :param gcp_conn_id: Optional connection ID to use when connecting to Google Cloud
         Storage.
-    :type gcp_conn_id: str
     :param delegate_to: Google account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
     :param description: Optional transfer service job description
-    :type description: str
     :param schedule: Optional transfer service schedule;
         If not set, run transfer job once as soon as the operator runs
         See:
@@ -977,18 +979,13 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         * dates they can be passed as :class:`datetime.date`
         * times they can be passed as :class:`datetime.time`
 
-    :type schedule: dict
     :param object_conditions: Optional transfer service object conditions; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec#ObjectConditions
-    :type object_conditions: dict
     :param transfer_options: Optional transfer service transfer options; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec#TransferOptions
-    :type transfer_options: dict
     :param wait: Wait for transfer to finish. It must be set to True, if
         'delete_job_after_completion' is set to True.
-    :type wait: bool
     :param timeout: Time to wait for the operation to end in seconds. Defaults to 60 seconds if not specified.
-    :type timeout: Optional[Union[float, timedelta]]
     :param google_impersonation_chain: Optional Google service account to impersonate using
         short-term credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -997,41 +994,39 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type google_impersonation_chain: Union[str, Sequence[str]]
     :param delete_job_after_completion: If True, delete the job after complete.
         If set to True, 'wait' must be set to True.
-    :type delete_job_after_completion: bool
     """
 
-    template_fields = (
-        'gcp_conn_id',
-        'source_bucket',
-        'destination_bucket',
-        'source_path',
-        'destination_path',
-        'description',
-        'object_conditions',
-        'google_impersonation_chain',
+    template_fields: Sequence[str] = (
+        "gcp_conn_id",
+        "source_bucket",
+        "destination_bucket",
+        "source_path",
+        "destination_path",
+        "description",
+        "object_conditions",
+        "google_impersonation_chain",
     )
-    ui_color = '#e09411'
+    ui_color = "#e09411"
 
     def __init__(
         self,
         *,
         source_bucket: str,
         destination_bucket: str,
-        source_path: Optional[str] = None,
-        destination_path: Optional[str] = None,
-        project_id: Optional[str] = None,
-        gcp_conn_id: str = 'google_cloud_default',
-        delegate_to: Optional[str] = None,
-        description: Optional[str] = None,
-        schedule: Optional[Dict] = None,
-        object_conditions: Optional[Dict] = None,
-        transfer_options: Optional[Dict] = None,
+        source_path: str | None = None,
+        destination_path: str | None = None,
+        project_id: str | None = None,
+        gcp_conn_id: str = "google_cloud_default",
+        delegate_to: str | None = None,
+        description: str | None = None,
+        schedule: dict | None = None,
+        object_conditions: dict | None = None,
+        transfer_options: dict | None = None,
         wait: bool = True,
-        timeout: Optional[float] = None,
-        google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        timeout: float | None = None,
+        google_impersonation_chain: str | Sequence[str] | None = None,
         delete_job_after_completion: bool = False,
         **kwargs,
     ) -> None:
@@ -1058,7 +1053,7 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         if self.delete_job_after_completion and not self.wait:
             raise AirflowException("If 'delete_job_after_completion' is True, then 'wait' must also be True.")
 
-    def execute(self, context) -> None:
+    def execute(self, context: Context) -> None:
         hook = CloudDataTransferServiceHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,

@@ -14,15 +14,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import re
 from copy import deepcopy
-from typing import Dict, Sequence, Tuple
+from typing import Sequence
 from unittest import TestCase, mock
 
 import pytest
+from google.api_core.gapic_v1.method import _MethodDefault
 from google.api_core.retry import Retry
 from google.cloud.datacatalog import CreateTagRequest, CreateTagTemplateRequest, Entry, Tag, TagTemplate
+from google.protobuf.field_mask_pb2 import FieldMask
 
 from airflow import AirflowException
 from airflow.providers.google.cloud.hooks.datacatalog import CloudDataCatalogHook
@@ -35,28 +38,28 @@ TEST_GCP_CONN_ID: str = "test-gcp-conn-id"
 TEST_DELEGATE_TO: str = "test-delegate-to"
 TEST_LOCATION: str = "europe-west-3b"
 TEST_ENTRY_ID: str = "test-entry-id"
-TEST_ENTRY: Dict = {}
-TEST_RETRY: Retry = Retry()
+TEST_ENTRY: dict = {}
+TEST_RETRY: Retry | _MethodDefault = Retry()
 TEST_TIMEOUT: float = 4
-TEST_METADATA: Sequence[Tuple[str, str]] = ()
+TEST_METADATA: Sequence[tuple[str, str]] = ()
 TEST_ENTRY_GROUP_ID: str = "test-entry-group-id"
-TEST_ENTRY_GROUP: Dict = {}
-TEST_TAG: Dict = {}
+TEST_ENTRY_GROUP: dict = {}
+TEST_TAG: dict = {}
 TEST_TAG_TEMPLATE_ID: str = "test-tag-template-id"
-TEST_TAG_TEMPLATE: Dict = {"name": TEST_TAG_TEMPLATE_ID}
+TEST_TAG_TEMPLATE: dict = {"name": TEST_TAG_TEMPLATE_ID}
 TEST_TAG_TEMPLATE_FIELD_ID: str = "test-tag-template-field-id"
-TEST_TAG_TEMPLATE_FIELD: Dict = {}
+TEST_TAG_TEMPLATE_FIELD: dict = {}
 TEST_FORCE: bool = False
-TEST_READ_MASK: Dict = {"fields": ["name"]}
+TEST_READ_MASK: FieldMask = FieldMask(paths=["name"])
 TEST_RESOURCE: str = "test-resource"
 TEST_PAGE_SIZE: int = 50
 TEST_LINKED_RESOURCE: str = "test-linked-resource"
 TEST_SQL_RESOURCE: str = "test-sql-resource"
 TEST_NEW_TAG_TEMPLATE_FIELD_ID: str = "test-new-tag-template-field-id"
-TEST_SCOPE: Dict = {"include_project_ids": ["example-scope-project"]}
+TEST_SCOPE: dict = {"include_project_ids": ["example-scope-project"]}
 TEST_QUERY: str = "test-query"
 TEST_ORDER_BY: str = "test-order-by"
-TEST_UPDATE_MASK: Dict = {"fields": ["name"]}
+TEST_UPDATE_MASK: dict = {"fields": ["name"]}
 TEST_PARENT: str = "test-parent"
 TEST_NAME: str = "test-name"
 TEST_TAG_ID: str = "test-tag-id"
@@ -68,11 +71,11 @@ TEST_ENTRY_GROUP_PATH: str = f"projects/{{}}/locations/{TEST_LOCATION}/entryGrou
 TEST_TAG_TEMPLATE_PATH: str = f"projects/{{}}/locations/{TEST_LOCATION}/tagTemplates/{TEST_TAG_TEMPLATE_ID}"
 TEST_TAG_TEMPLATE_FIELD_PATH: str = (
     f"projects/{{}}/locations/{TEST_LOCATION}/tagTemplates/"
-    + f"{TEST_TAG_TEMPLATE_ID}/fields/{TEST_TAG_TEMPLATE_FIELD_ID}"
+    f"{TEST_TAG_TEMPLATE_ID}/fields/{TEST_TAG_TEMPLATE_FIELD_ID}"
 )
 TEST_TAG_PATH: str = (
     f"projects/{{}}/locations/{TEST_LOCATION}/entryGroups/{TEST_ENTRY_GROUP_ID}"
-    + f"/entries/{TEST_ENTRY_ID}/tags/{TEST_TAG_ID}"
+    f"/entries/{TEST_ENTRY_ID}/tags/{TEST_TAG_ID}"
 )
 TEST_PROJECT_ID_1 = "example-project-1"
 TEST_PROJECT_ID_2 = "example-project-2"
@@ -90,7 +93,7 @@ class TestCloudDataCatalog(TestCase):
             self.hook = CloudDataCatalogHook(gcp_conn_id="test")
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -109,7 +112,7 @@ class TestCloudDataCatalog(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -125,7 +128,7 @@ class TestCloudDataCatalog(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -136,7 +139,7 @@ class TestCloudDataCatalog(TestCase):
             self.hook.lookup_entry(retry=TEST_RETRY, timeout=TEST_TIMEOUT, metadata=TEST_METADATA)
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -171,7 +174,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
             self.hook = CloudDataCatalogHook(gcp_conn_id="test")
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -197,7 +200,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -222,7 +225,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -248,7 +251,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -274,7 +277,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -299,7 +302,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -325,7 +328,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -348,7 +351,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -370,7 +373,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -394,7 +397,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -415,7 +418,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -440,7 +443,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -463,7 +466,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -487,7 +490,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -509,7 +512,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -534,7 +537,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -564,7 +567,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         assert result == tag_2
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -589,7 +592,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -615,7 +618,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -639,7 +642,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -664,7 +667,7 @@ class TestCloudDataCatalogWithDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, TEST_PROJECT_ID_1),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -702,7 +705,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
             self.hook = CloudDataCatalogHook(gcp_conn_id="test")
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -729,7 +732,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -755,7 +758,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -782,7 +785,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -809,7 +812,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -835,7 +838,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -862,7 +865,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -884,7 +887,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -905,7 +908,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -928,7 +931,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -950,7 +953,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -973,7 +976,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -995,7 +998,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1020,7 +1023,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1041,7 +1044,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1064,7 +1067,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1092,7 +1095,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         assert result == tag_2
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1118,7 +1121,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1144,7 +1147,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1169,7 +1172,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1195,7 +1198,7 @@ class TestCloudDataCatalogWithoutDefaultProjectIdHook(TestCase):
         )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1240,7 +1243,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             self.hook = CloudDataCatalogHook(gcp_conn_id="test")
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1257,7 +1260,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1273,7 +1276,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1292,7 +1295,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1311,7 +1314,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1328,7 +1331,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1346,7 +1349,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1363,7 +1366,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1378,7 +1381,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1395,7 +1398,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1411,7 +1414,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1428,7 +1431,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1444,7 +1447,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1460,7 +1463,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1475,7 +1478,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1492,7 +1495,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1513,7 +1516,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1530,7 +1533,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1548,7 +1551,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1567,7 +1570,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")
@@ -1584,7 +1587,7 @@ class TestCloudDataCatalogMissingProjectIdHook(TestCase):
             )
 
     @mock.patch(
-        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook._get_credentials_and_project_id",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook.get_credentials_and_project_id",
         return_value=(TEST_CREDENTIALS, None),
     )
     @mock.patch("airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook.get_conn")

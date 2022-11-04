@@ -16,7 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 """Hook for sending or receiving data from PagerDuty as well as creating PagerDuty incidents."""
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 import pdpyras
 
@@ -41,17 +43,17 @@ class PagerdutyEventsHook(BaseHook):
     hook_name = "Pagerduty Events"
 
     @staticmethod
-    def get_ui_field_behaviour() -> Dict:
+    def get_ui_field_behaviour() -> dict[str, Any]:
         """Returns custom field behaviour"""
         return {
-            "hidden_fields": ['port', 'login', 'schema', 'host', 'extra'],
+            "hidden_fields": ["port", "login", "schema", "host", "extra"],
             "relabeling": {
-                'password': 'Pagerduty Integration key',
+                "password": "Pagerduty Integration key",
             },
         }
 
     def __init__(
-        self, integration_key: Optional[str] = None, pagerduty_events_conn_id: Optional[str] = None
+        self, integration_key: str | None = None, pagerduty_events_conn_id: str | None = None
     ) -> None:
         super().__init__()
         self.integration_key = None
@@ -66,62 +68,50 @@ class PagerdutyEventsHook(BaseHook):
 
         if self.integration_key is None:
             raise AirflowException(
-                'Cannot get token: No valid integration key nor pagerduty_events_conn_id supplied.'
+                "Cannot get token: No valid integration key nor pagerduty_events_conn_id supplied."
             )
 
     def create_event(
         self,
         summary: str,
         severity: str,
-        source: str = 'airflow',
-        action: str = 'trigger',
-        dedup_key: Optional[str] = None,
-        custom_details: Optional[Any] = None,
-        group: Optional[str] = None,
-        component: Optional[str] = None,
-        class_type: Optional[str] = None,
-        images: Optional[List[Any]] = None,
-        links: Optional[List[Any]] = None,
-    ) -> Dict:
+        source: str = "airflow",
+        action: str = "trigger",
+        dedup_key: str | None = None,
+        custom_details: Any | None = None,
+        group: str | None = None,
+        component: str | None = None,
+        class_type: str | None = None,
+        images: list[Any] | None = None,
+        links: list[Any] | None = None,
+    ) -> dict:
         """
         Create event for service integration.
 
         :param summary: Summary for the event
-        :type summary: str
         :param severity: Severity for the event, needs to be one of: info, warning, error, critical
-        :type severity: str
         :param source: Specific human-readable unique identifier, such as a
             hostname, for the system having the problem.
-        :type source: str
         :param action: Event action, needs to be one of: trigger, acknowledge,
             resolve. Default to trigger if not specified.
-        :type action: str
         :param dedup_key: A string which identifies the alert triggered for the given event.
             Required for the actions acknowledge and resolve.
-        :type dedup_key: str
         :param custom_details: Free-form details from the event. Can be a dictionary or a string.
             If a dictionary is passed it will show up in PagerDuty as a table.
-        :type custom_details: dict or str
         :param group: A cluster or grouping of sources. For example, sources
-            “prod-datapipe-02” and “prod-datapipe-03” might both be part of “prod-datapipe”
-        :type group: str
+            "prod-datapipe-02" and "prod-datapipe-03" might both be part of "prod-datapipe"
         :param component: The part or component of the affected system that is broken.
-        :type component: str
         :param class_type: The class/type of the event.
-        :type class_type: str
         :param images: List of images to include. Each dictionary in the list accepts the following keys:
             `src`: The source (URL) of the image being attached to the incident. This image must be served via
             HTTPS.
             `href`: [Optional] URL to make the image a clickable link.
             `alt`: [Optional] Alternative text for the image.
-        :type images: list[dict]
         :param links: List of links to include. Each dictionary in the list accepts the following keys:
             `href`: URL of the link to be attached.
             `text`: [Optional] Plain text that describes the purpose of the link, and can be used as the
             link's text.
-        :type links: list[dict]
         :return: PagerDuty Events API v2 response.
-        :rtype: dict
         """
         payload = {
             "summary": summary,
@@ -137,7 +127,7 @@ class PagerdutyEventsHook(BaseHook):
         if class_type:
             payload["class"] = class_type
 
-        actions = ('trigger', 'acknowledge', 'resolve')
+        actions = ("trigger", "acknowledge", "resolve")
         if action not in actions:
             raise ValueError(f"Event action must be one of: {', '.join(actions)}")
         data = {
@@ -146,7 +136,7 @@ class PagerdutyEventsHook(BaseHook):
         }
         if dedup_key:
             data["dedup_key"] = dedup_key
-        elif action != 'trigger':
+        elif action != "trigger":
             raise ValueError(
                 f"The dedup_key property is required for event_action={action} events, "
                 f"and it must be a string."

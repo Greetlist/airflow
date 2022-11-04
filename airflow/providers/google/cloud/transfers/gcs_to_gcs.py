@@ -16,14 +16,18 @@
 # specific language governing permissions and limitations
 # under the License.
 """This module contains a Google Cloud Storage operator."""
-import warnings
-from typing import Optional, Sequence, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 
-WILDCARD = '*'
+WILDCARD = "*"
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 class GCSToGCSOperator(BaseOperator):
@@ -36,21 +40,17 @@ class GCSToGCSOperator(BaseOperator):
 
     :param source_bucket: The source Google Cloud Storage bucket where the
          object is. (templated)
-    :type source_bucket: str
     :param source_object: The source name of the object to copy in the Google cloud
         storage bucket. (templated)
         You can use only one wildcard for objects (filenames) within your
         bucket. The wildcard can appear inside the object name or at the
         end of the object name. Appending a wildcard to the bucket name is
         unsupported.
-    :type source_object: str
     :param source_objects: A list of source name of the objects to copy in the Google cloud
         storage bucket. (templated)
-    :type source_objects: List[str]
     :param destination_bucket: The destination Google Cloud Storage bucket
         where the object should be. If the destination_bucket is None, it defaults
         to source_bucket. (templated)
-    :type destination_bucket: str
     :param destination_object: The destination name of the object in the
         destination Google Cloud Storage bucket. (templated)
         If a wildcard is supplied in the source_object argument, this is the
@@ -62,37 +62,25 @@ class GCSToGCSOperator(BaseOperator):
         the destination_object as e.g. ``blah/foo``, in which case the copied file
         will be named ``blah/foo/baz``.
         The same thing applies to source objects inside source_objects.
-    :type destination_object: str
     :param move_object: When move object is True, the object is moved instead
         of copied to the new location. This is the equivalent of a mv command
         as opposed to a cp command.
-    :type move_object: bool
     :param replace: Whether you want to replace existing destination files or not.
-    :type replace: bool
     :param delimiter: This is used to restrict the result to only the 'files' in a given 'folder'.
         If source_objects = ['foo/bah/'] and delimiter = '.avro', then only the 'files' in the
         folder 'foo/bah/' with '.avro' delimiter will be copied to the destination object.
-    :type delimiter: str
     :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
-    :type gcp_conn_id: str
-    :param google_cloud_storage_conn_id: (Deprecated) The connection ID used to connect to Google Cloud.
-        This parameter has been deprecated. You should pass the gcp_conn_id parameter instead.
-    :type google_cloud_storage_conn_id: str
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :param last_modified_time: When specified, the objects will be copied or moved,
         only if they were modified after last_modified_time.
         If tzinfo has not been set, UTC will be assumed.
-    :type last_modified_time: datetime.datetime
     :param maximum_modified_time: When specified, the objects will be copied or moved,
         only if they were modified before maximum_modified_time.
         If tzinfo has not been set, UTC will be assumed.
-    :type maximum_modified_time: datetime.datetime
     :param is_older_than: When specified, the objects will be copied if they are older
         than the specified time in seconds.
-    :type is_older_than: int
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -101,7 +89,10 @@ class GCSToGCSOperator(BaseOperator):
         If set as a sequence, the identities from the list must grant
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
-    :type impersonation_chain: Union[str, Sequence[str]]
+    :param source_object_required: Whether you want to raise an exception when the source object
+        doesn't exist. It doesn't have any effect when the source objects are folders or patterns.
+    :param exact_match: When specified, only exact match of the source object (filename) will be
+        copied.
 
     :Example:
 
@@ -173,16 +164,16 @@ class GCSToGCSOperator(BaseOperator):
 
     """
 
-    template_fields = (
-        'source_bucket',
-        'source_object',
-        'source_objects',
-        'destination_bucket',
-        'destination_object',
-        'delimiter',
-        'impersonation_chain',
+    template_fields: Sequence[str] = (
+        "source_bucket",
+        "source_object",
+        "source_objects",
+        "destination_bucket",
+        "destination_object",
+        "delimiter",
+        "impersonation_chain",
     )
-    ui_color = '#f0eee4'
+    ui_color = "#f0eee4"
 
     def __init__(
         self,
@@ -195,24 +186,17 @@ class GCSToGCSOperator(BaseOperator):
         delimiter=None,
         move_object=False,
         replace=True,
-        gcp_conn_id='google_cloud_default',
-        google_cloud_storage_conn_id=None,
+        gcp_conn_id="google_cloud_default",
         delegate_to=None,
         last_modified_time=None,
         maximum_modified_time=None,
         is_older_than=None,
-        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        impersonation_chain: str | Sequence[str] | None = None,
+        source_object_required=False,
+        exact_match=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        if google_cloud_storage_conn_id:
-            warnings.warn(
-                "The google_cloud_storage_conn_id parameter has been deprecated. You should pass "
-                "the gcp_conn_id parameter.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            gcp_conn_id = google_cloud_storage_conn_id
 
         self.source_bucket = source_bucket
         self.source_object = source_object
@@ -228,8 +212,10 @@ class GCSToGCSOperator(BaseOperator):
         self.maximum_modified_time = maximum_modified_time
         self.is_older_than = is_older_than
         self.impersonation_chain = impersonation_chain
+        self.source_object_required = source_object_required
+        self.exact_match = exact_match
 
-    def execute(self, context):
+    def execute(self, context: Context):
 
         hook = GCSHook(
             gcp_conn_id=self.gcp_conn_id,
@@ -248,7 +234,7 @@ class GCSToGCSOperator(BaseOperator):
             raise AirflowException(error_msg)
 
         if self.source_objects and not all(isinstance(item, str) for item in self.source_objects):
-            raise AirflowException('At least, one of the `objects` in the `source_objects` is not a string')
+            raise AirflowException("At least, one of the `objects` in the `source_objects` is not a string")
 
         # If source_object is set, default it to source_objects
         if self.source_object:
@@ -256,15 +242,15 @@ class GCSToGCSOperator(BaseOperator):
 
         if self.destination_bucket is None:
             self.log.warning(
-                'destination_bucket is None. Defaulting it to source_bucket (%s)', self.source_bucket
+                "destination_bucket is None. Defaulting it to source_bucket (%s)", self.source_bucket
             )
             self.destination_bucket = self.source_bucket
 
         # An empty source_object means to copy all files
         if len(self.source_objects) == 0:
-            self.source_objects = ['']
+            self.source_objects = [""]
         # Raise exception if empty string `''` is used twice in source_object, this is to avoid double copy
-        if self.source_objects.count('') > 1:
+        if self.source_objects.count("") > 1:
             raise AirflowException("You can't have two empty strings inside source_object")
 
         # Iterate over the source_objects and do the copy
@@ -275,6 +261,32 @@ class GCSToGCSOperator(BaseOperator):
             # Now search with prefix using provided delimiter if any
             else:
                 self._copy_source_without_wildcard(hook=hook, prefix=prefix)
+
+    def _ignore_existing_files(self, hook, prefix, **kwargs):
+        # list all files in the Destination GCS bucket
+        # and only keep those files which are present in
+        # Source GCS bucket and not in Destination GCS bucket
+        delimiter = kwargs.get("delimiter")
+        objects = kwargs.get("objects")
+        if self.destination_object is None:
+            existing_objects = hook.list(self.destination_bucket, prefix=prefix, delimiter=delimiter)
+        else:
+            self.log.info("Replaced destination_object with source_object prefix.")
+            destination_objects = hook.list(
+                self.destination_bucket,
+                prefix=self.destination_object,
+                delimiter=delimiter,
+            )
+            existing_objects = [
+                dest_object.replace(self.destination_object, prefix, 1) for dest_object in destination_objects
+            ]
+
+        objects = set(objects) - set(existing_objects)
+        if len(objects) > 0:
+            self.log.info("%s files are going to be synced: %s.", len(objects), objects)
+        else:
+            self.log.info("There are no new files to sync. Have a nice day!")
+        return objects
 
     def _copy_source_without_wildcard(self, hook, prefix):
         """
@@ -318,6 +330,10 @@ class GCSToGCSOperator(BaseOperator):
         """
         objects = hook.list(self.source_bucket, prefix=prefix, delimiter=self.delimiter)
 
+        if not self.replace:
+            # If we are not replacing, ignore files already existing in source buckets
+            objects = self._ignore_existing_files(hook, prefix, objects=objects, delimiter=self.delimiter)
+
         # If objects is empty and we have prefix, let's check if prefix is a blob
         # and copy directly
         if len(objects) == 0 and prefix:
@@ -325,7 +341,14 @@ class GCSToGCSOperator(BaseOperator):
                 self._copy_single_object(
                     hook=hook, source_object=prefix, destination_object=self.destination_object
                 )
+            elif self.source_object_required:
+                msg = f"{prefix} does not exist in bucket {self.source_bucket}"
+                self.log.warning(msg)
+                raise AirflowException(msg)
+
         for source_obj in objects:
+            if self.exact_match and (source_obj != prefix or not source_obj.endswith(prefix)):
+                continue
             if self.destination_object is None:
                 destination_object = source_obj
             else:
@@ -343,33 +366,15 @@ class GCSToGCSOperator(BaseOperator):
             )
 
             raise AirflowException(error_msg)
-        self.log.info('Delimiter ignored because wildcard is in prefix')
+        self.log.info("Delimiter ignored because wildcard is in prefix")
         prefix_, delimiter = prefix.split(WILDCARD, 1)
         objects = hook.list(self.source_bucket, prefix=prefix_, delimiter=delimiter)
         if not self.replace:
             # If we are not replacing, list all files in the Destination GCS bucket
             # and only keep those files which are present in
             # Source GCS bucket and not in Destination GCS bucket
+            objects = self._ignore_existing_files(hook, prefix_, delimiter=delimiter, objects=objects)
 
-            if self.destination_object is None:
-                existing_objects = hook.list(self.destination_bucket, prefix=prefix_, delimiter=delimiter)
-            else:
-                self.log.info("Replaced destination_object with source_object prefix.")
-                destination_objects = hook.list(
-                    self.destination_bucket,
-                    prefix=self.destination_object,
-                    delimiter=delimiter,
-                )
-                existing_objects = [
-                    dest_object.replace(self.destination_object, prefix_, 1)
-                    for dest_object in destination_objects
-                ]
-
-            objects = set(objects) - set(existing_objects)
-            if len(objects) > 0:
-                self.log.info('%s files are going to be synced: %s.', len(objects), objects)
-            else:
-                self.log.info('There are no new files to sync. Have a nice day!')
         for source_object in objects:
             if self.destination_object is None:
                 destination_object = source_object
@@ -424,7 +429,7 @@ class GCSToGCSOperator(BaseOperator):
                 return
 
         self.log.info(
-            'Executing copy of gs://%s/%s to gs://%s/%s',
+            "Executing copy of gs://%s/%s to gs://%s/%s",
             self.source_bucket,
             source_object,
             self.destination_bucket,
