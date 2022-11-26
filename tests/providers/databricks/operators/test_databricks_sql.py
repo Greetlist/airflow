@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import unittest
 from unittest import mock
 
 import pytest
@@ -38,7 +37,7 @@ DEFAULT_CONN_ID = "databricks_default"
 COPY_FILE_LOCATION = "s3://my-bucket/jsonData"
 
 
-class TestDatabricksSqlOperator(unittest.TestCase):
+class TestDatabricksSqlOperator:
     @mock.patch("airflow.providers.databricks.operators.databricks_sql.DatabricksSqlHook")
     def test_exec_success(self, db_mock_class):
         """
@@ -47,13 +46,15 @@ class TestDatabricksSqlOperator(unittest.TestCase):
         sql = "select * from dummy"
         op = DatabricksSqlOperator(task_id=TASK_ID, sql=sql, do_xcom_push=True)
         db_mock = db_mock_class.return_value
-        mock_schema = [("id",), ("value",)]
+        mock_description = [("id",), ("value",)]
         mock_results = [Row(id=1, value="value1")]
-        db_mock.run.return_value = [(mock_schema, mock_results)]
+        db_mock.run.return_value = mock_results
+        db_mock.last_description = mock_description
+        db_mock.scalar_return_last = False
 
-        results = op.execute(None)
+        execute_results = op.execute(None)
 
-        assert results[0][1] == mock_results
+        assert execute_results == (mock_description, mock_results)
         db_mock_class.assert_called_once_with(
             DEFAULT_CONN_ID,
             http_path=None,
@@ -82,9 +83,11 @@ class TestDatabricksSqlOperator(unittest.TestCase):
         tempfile_path = tempfile.mkstemp()[1]
         op = DatabricksSqlOperator(task_id=TASK_ID, sql=sql, output_path=tempfile_path)
         db_mock = db_mock_class.return_value
-        mock_schema = [("id",), ("value",)]
+        mock_description = [("id",), ("value",)]
         mock_results = [Row(id=1, value="value1")]
-        db_mock.run.return_value = [(mock_schema, mock_results)]
+        db_mock.run.return_value = mock_results
+        db_mock.last_description = mock_description
+        db_mock.scalar_return_last = False
 
         try:
             op.execute(None)
@@ -113,7 +116,7 @@ class TestDatabricksSqlOperator(unittest.TestCase):
         )
 
 
-class TestDatabricksSqlCopyIntoOperator(unittest.TestCase):
+class TestDatabricksSqlCopyIntoOperator:
     def test_copy_with_files(self):
         op = DatabricksCopyIntoOperator(
             file_location=COPY_FILE_LOCATION,
